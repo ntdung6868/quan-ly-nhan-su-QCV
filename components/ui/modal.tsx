@@ -35,15 +35,19 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-xs animate-in fade-in-0 duration-200"
+        onClick={onClose}
+      />
       <div className={cn(
-        "relative bg-white rounded-2xl shadow-2xl w-full max-h-[90vh] flex flex-col",
+        "relative bg-card text-card-foreground rounded-2xl shadow-2xl w-full max-h-[90vh] flex flex-col",
+        "animate-in fade-in-0 zoom-in-95 duration-200",
         sizeMap[size]
       )}>
         {title && (
-          <div className="flex items-center justify-between p-5 border-b border-gray-100 flex-shrink-0">
-            <h3 className="font-semibold text-gray-900">{title}</h3>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
+          <div className="flex items-center justify-between p-5 border-b border-border flex-shrink-0">
+            <h3 className="font-semibold">{title}</h3>
+            <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition">
               <X size={18} />
             </button>
           </div>

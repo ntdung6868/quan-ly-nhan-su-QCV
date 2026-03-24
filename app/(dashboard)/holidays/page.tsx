@@ -1,125 +1,186 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useState, useMemo } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { holidaySchema, type HolidayFormValues } from "@/lib/validations";
+import {
+  useHolidays,
+  useCreateHoliday,
+  useDeleteHoliday,
+} from "@/hooks/use-holidays";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
+import { FormField } from "@/components/ui/form-field";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatDate } from "@/lib/utils";
 import { CalendarOff, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Holiday } from "@/types/database";
 
 export default function HolidaysPage() {
-  const supabase = createClient();
-  const [holidays, setHolidays] = useState<Holiday[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<Partial<Holiday>>({});
-  const [isSaving, setIsSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Holiday | null>(null);
 
-  useEffect(() => { loadData(); }, []);
+  const { data: holidays = [], isLoading } = useHolidays();
+  const createMutation = useCreateHoliday();
+  const deleteMutation = useDeleteHoliday();
 
-  async function loadData() {
-    const { data } = await supabase.from("holidays").select("*").order("date");
-    setHolidays(data || []);
-    setIsLoading(false);
+  const form = useForm<HolidayFormValues>({
+    resolver: zodResolver(holidaySchema),
+    defaultValues: {
+      name: "",
+      date: "",
+      is_recurring: false,
+    },
+  });
+
+  function openCreate() {
+    form.reset({ name: "", date: "", is_recurring: false });
+    setModalOpen(true);
   }
 
-  async function handleSave() {
-    if (!form.name || !form.date) { toast.error("Vui lòng nhập tên và ngày"); return; }
-    setIsSaving(true);
-    const { error } = await supabase.from("holidays").insert(form as Holiday);
-    setIsSaving(false);
-    if (error) { toast.error("Lỗi thêm ngày lễ"); return; }
-    toast.success("Đã thêm ngày lễ");
-    setModalOpen(false);
-    setForm({});
-    loadData();
+  function onSubmit(values: HolidayFormValues) {
+    createMutation.mutate(values, {
+      onSuccess: () => {
+        toast.success("Đã thêm ngày lễ");
+        setModalOpen(false);
+        form.reset();
+      },
+      onError: (err) => toast.error(err.message),
+    });
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Xoá ngày lễ này?")) return;
-    await supabase.from("holidays").delete().eq("id", id);
-    toast.success("Đã xoá");
-    loadData();
-  }
+  const grouped = useMemo(() => {
+    return holidays.reduce((acc, h) => {
+      const year = new Date(h.date).getFullYear().toString();
+      if (!acc[year]) acc[year] = [];
+      acc[year].push(h);
+      return acc;
+    }, {} as Record<string, Holiday[]>);
+  }, [holidays]);
 
-  const grouped = holidays.reduce((acc, h) => {
-    const year = new Date(h.date).getFullYear().toString();
-    if (!acc[year]) acc[year] = [];
-    acc[year].push(h);
-    return acc;
-  }, {} as Record<string, Holiday[]>);
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <div className="space-y-5">
+        <div className="flex justify-end">
+          <Button onClick={openCreate} leftIcon={<Plus size={14} />} size="sm">Thêm ngày lễ</Button>
+        </div>
+        <div className="bg-card rounded-xl ring-1 ring-border overflow-hidden animate-pulse">
+          <div className="px-4 py-3 bg-muted border-b border-border">
+            <div className="h-4 w-32 rounded bg-muted-foreground/20" />
+          </div>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-border/50">
+              <div className="w-10 h-10 rounded bg-muted" />
+              <div className="space-y-1 flex-1">
+                <div className="h-4 w-40 rounded bg-muted" />
+                <div className="h-3 w-24 rounded bg-muted" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
       <div className="flex justify-end">
-        <Button onClick={() => { setForm({ is_recurring: false }); setModalOpen(true); }}
-          leftIcon={<Plus size={14} />} size="sm">Thêm ngày lễ</Button>
+        <Button onClick={openCreate} leftIcon={<Plus size={14} />} size="sm">Thêm ngày lễ</Button>
       </div>
 
-      {isLoading ? (
-        <div className="text-center text-gray-400 py-8">Đang tải...</div>
-      ) : holidays.length === 0 ? (
+      {holidays.length === 0 ? (
         <EmptyState icon={CalendarOff} title="Chưa có ngày lễ nào" />
       ) : (
-        Object.entries(grouped).sort((a, b) => Number(b[0]) - Number(a[0])).map(([year, items]) => (
-          <div key={year} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-700">Năm {year} ({items.length} ngày)</h3>
-            </div>
-            <div className="divide-y divide-gray-50">
-              {items.map((h) => (
-                <div key={h.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 text-center">
-                      <p className="text-lg font-bold text-blue-600">{new Date(h.date).getDate()}</p>
-                      <p className="text-xs text-gray-400">
-                        Th.{new Date(h.date).getMonth() + 1}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-800">{h.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-gray-400">{formatDate(h.date)}</span>
-                        {h.is_recurring && (
-                          <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">Hàng năm</span>
-                        )}
+        Object.entries(grouped)
+          .sort((a, b) => Number(b[0]) - Number(a[0]))
+          .map(([year, items]) => (
+            <div key={year} className="bg-card rounded-xl ring-1 ring-border overflow-hidden">
+              <div className="px-4 py-3 bg-muted border-b border-border">
+                <h3 className="font-semibold text-foreground">Năm {year} ({items.length} ngày)</h3>
+              </div>
+              <div className="divide-y divide-border/50">
+                {items.map((h) => (
+                  <div key={h.id} className="flex items-center justify-between px-4 py-3 hover:bg-accent transition">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 text-center">
+                        <p className="text-lg font-bold text-primary">{new Date(h.date).getDate()}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Th.{new Date(h.date).getMonth() + 1}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{h.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-muted-foreground">{formatDate(h.date)}</span>
+                          {h.is_recurring && (
+                            <Badge variant="success">Hàng năm</Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
+                    <button
+                      onClick={() => setDeleteTarget(h)}
+                      className="p-1.5 hover:bg-destructive/10 rounded text-destructive transition"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
-                  <button onClick={() => handleDelete(h.id)}
-                    className="p-1.5 hover:bg-red-50 rounded text-red-400 transition"><Trash2 size={14} /></button>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        ))
+          ))
       )}
 
+      {/* Create Modal */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Thêm ngày lễ" size="sm">
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tên ngày lễ *</label>
-            <input value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <div className="space-y-3">
+            <FormField label="Tên ngày lễ" required error={form.formState.errors.name?.message}>
+              <input {...form.register("name")} className="input" />
+            </FormField>
+            <FormField label="Ngày" required error={form.formState.errors.date?.message}>
+              <input type="date" {...form.register("date")} className="input" />
+            </FormField>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                {...form.register("is_recurring")}
+                className="rounded"
+              />
+              <span className="text-sm text-foreground">Lặp lại hàng năm</span>
+            </label>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Ngày *</label>
-            <input type="date" value={form.date || ""} onChange={(e) => setForm({ ...form, date: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-border">
+            <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Huỷ</Button>
+            <Button loading={createMutation.isPending} type="submit">Thêm</Button>
           </div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.is_recurring || false} onChange={(e) => setForm({ ...form, is_recurring: e.target.checked })} className="rounded" />
-            <span className="text-sm text-gray-700">Lặp lại hàng năm</span>
-          </label>
-        </div>
-        <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-100">
-          <Button variant="secondary" onClick={() => setModalOpen(false)}>Huỷ</Button>
-          <Button loading={isSaving} onClick={handleSave}>Thêm</Button>
-        </div>
+        </form>
       </Modal>
+
+      {/* Delete Confirm */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title={`Xoá "${deleteTarget?.name}"?`}
+        description="Hành động này không thể hoàn tác."
+        variant="danger"
+        confirmText="Xoá"
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          deleteMutation.mutate(deleteTarget!.id, {
+            onSuccess: () => {
+              toast.success("Đã xoá");
+              setDeleteTarget(null);
+            },
+            onError: (err) => toast.error(err.message),
+          });
+        }}
+      />
     </div>
   );
 }

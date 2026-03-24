@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { Camera, MapPin, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Camera, MapPin, CheckCircle2, CircleCheck, CircleX, AlertCircle } from "lucide-react";
 import type { Attendance, CompanyConfig } from "@/types/database";
 
 interface CheckInModalProps {
@@ -28,17 +28,34 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
   const [config, setConfig] = useState<CompanyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [notes, setNotes] = useState("");
+  const [todayLeave, setTodayLeave] = useState<string | null>(null);
   const isCheckOut = !!(currentAttendance?.check_in && !currentAttendance?.check_out);
 
   useEffect(() => {
     if (open) {
       loadConfig();
       getLocation();
+      checkTodayLeave();
     }
     return () => {
       stream?.getTracks().forEach((t) => t.stop());
     };
   }, [open]);
+
+  async function checkTodayLeave() {
+    if (!employee) return;
+    const today = new Date().toISOString().split("T")[0];
+    const { data } = await supabase
+      .from("leaves")
+      .select("*, leave_type:leave_types(name)")
+      .eq("employee_id", employee.id)
+      .eq("status", "approved")
+      .lte("start_date", today)
+      .gte("end_date", today)
+      .limit(1);
+    const leave = data?.[0];
+    setTodayLeave(leave ? (leave.leave_type as { name: string } | null)?.name || "Nghỉ phép" : null);
+  }
 
   async function loadConfig() {
     const { data } = await supabase.from("company_config").select("*").single();
@@ -76,18 +93,20 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
     );
   }
 
-  function checkGpsDistance(): boolean {
-    if (!config?.gps_enabled || !config.gps_lat || !config.gps_lng) return true;
-    if (!location) return false;
+  function calcDistance(): number | null {
+    if (!config?.gps_enabled || !config.gps_lat || !config.gps_lng || !location) return null;
     const R = 6371e3;
     const φ1 = (location.lat * Math.PI) / 180;
     const φ2 = (config.gps_lat * Math.PI) / 180;
     const Δφ = ((config.gps_lat - location.lat) * Math.PI) / 180;
     const Δλ = ((config.gps_lng - location.lng) * Math.PI) / 180;
     const a = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
-    const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return distance <= (config.gps_radius || 100);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
+
+  const gpsDistance = calcDistance();
+  const gpsRadius = config?.gps_radius || 100;
+  const isInRange = config?.gps_enabled ? (gpsDistance !== null && gpsDistance <= gpsRadius) : true;
 
   async function uploadPhoto(): Promise<string | null> {
     if (!photoData || !employee) return null;
@@ -103,7 +122,11 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
 
   async function handleSubmit() {
     if (!employee) return;
-    if (config?.gps_enabled && !checkGpsDistance()) {
+    if (!isCheckOut && todayLeave) {
+      toast.error(`Hôm nay bạn đang nghỉ phép (${todayLeave}). Không thể check-in.`);
+      return;
+    }
+    if (config?.gps_enabled && !isInRange) {
       toast.error("Bạn đang ngoài phạm vi chấm công cho phép");
       return;
     }
@@ -118,6 +141,16 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
       const today = now.split("T")[0];
 
       if (!isCheckOut) {
+        // Tính trạng thái trễ dựa trên late_after_time
+        let status: "present" | "late" = "present";
+        if (config?.late_after_time) {
+          const [h, m] = config.late_after_time.split(":").map(Number);
+          const currentTime = new Date();
+          const lateTime = new Date();
+          lateTime.setHours(h, m, 0, 0);
+          if (currentTime > lateTime) status = "late";
+        }
+
         const { data, error } = await supabase
           .from("attendance")
           .upsert({
@@ -127,7 +160,7 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
             check_in_lat: location?.lat,
             check_in_lng: location?.lng,
             check_in_photo: photoUrl,
-            status: "present",
+            status,
             notes: notes || null,
           })
           .select()
@@ -170,18 +203,26 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
   return (
     <Modal open={open} onClose={onClose} title={isCheckOut ? "Check-out" : "Check-in"} size="sm">
       <div className="space-y-4">
+        {/* Leave warning */}
+        {!isCheckOut && todayLeave && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>Hôm nay bạn đang nghỉ <strong>{todayLeave}</strong>. Không thể check-in.</span>
+          </div>
+        )}
+
         {/* Camera */}
         {(config?.photo_required || stream || photoData) && (
-          <div className="rounded-xl overflow-hidden bg-gray-900 aspect-video relative">
+          <div className="rounded-xl overflow-hidden bg-foreground aspect-video relative">
             {!photoData ? (
               <>
                 <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                 {stream && (
                   <button
                     onClick={capturePhoto}
-                    className="absolute bottom-3 left-1/2 -translate-x-1/2 w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-lg hover:bg-gray-100 transition"
+                    className="absolute bottom-3 left-1/2 -translate-x-1/2 w-12 h-12 bg-card rounded-full flex items-center justify-center shadow-lg hover:bg-accent transition"
                   >
-                    <Camera size={20} className="text-gray-800" />
+                    <Camera size={20} className="text-foreground" />
                   </button>
                 )}
                 {!stream && config?.photo_required && (
@@ -209,21 +250,46 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
 
         {/* Location */}
         <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
-          location ? "bg-green-50 text-green-700" : "bg-yellow-50 text-yellow-700"
+          !location && !locationError
+            ? "bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400"
+            : locationError
+              ? "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400"
+              : config?.gps_enabled
+                ? isInRange
+                  ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400"
+                  : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400"
+                : "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400"
         }`}>
-          <MapPin size={16} />
+          <MapPin size={16} className="shrink-0" />
           {location ? (
-            <span>Vị trí: {location.lat.toFixed(5)}, {location.lng.toFixed(5)}</span>
+            <div className="flex-1 flex items-center justify-between gap-2">
+              <span>Vị trí: {location.lat.toFixed(5)}, {location.lng.toFixed(5)}</span>
+              {config?.gps_enabled && gpsDistance !== null && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-xs opacity-70">{Math.round(gpsDistance)}m</span>
+                  {isInRange ? (
+                    <CircleCheck size={18} className="text-green-600 dark:text-green-400" />
+                  ) : (
+                    <CircleX size={18} className="text-red-600 dark:text-red-400" />
+                  )}
+                </div>
+              )}
+            </div>
           ) : locationError ? (
             <span>{locationError}</span>
           ) : (
             <span>Đang lấy vị trí...</span>
           )}
         </div>
+        {config?.gps_enabled && location && !isInRange && (
+          <p className="text-xs text-red-600 dark:text-red-400 -mt-2 ml-1">
+            Ngoài phạm vi cho phép ({gpsRadius}m)
+          </p>
+        )}
 
         {/* Notes */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-card-foreground mb-1">
             Ghi chú (tuỳ chọn)
           </label>
           <textarea
@@ -231,7 +297,7 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             placeholder="Nhập ghi chú nếu có..."
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring/50 resize-none"
           />
         </div>
 
@@ -239,6 +305,7 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
           className="w-full"
           loading={isLoading}
           onClick={handleSubmit}
+          disabled={!isCheckOut && !!todayLeave}
           leftIcon={<CheckCircle2 size={16} />}
         >
           {isCheckOut ? "Xác nhận Check-out" : "Xác nhận Check-in"}

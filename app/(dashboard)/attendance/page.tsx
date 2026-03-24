@@ -1,131 +1,225 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useState, useMemo, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useAttendance, type AttendanceWithEmployee } from "@/hooks/use-attendance";
+import { useTodayAttendance } from "@/hooks/use-attendance";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { StatCard } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
 import { CheckInModal } from "@/components/attendance/check-in-modal";
-import { formatDate, formatTime, formatDateTime } from "@/lib/utils";
+import { formatDate, formatTime } from "@/lib/utils";
 import { Clock, CheckCircle, XCircle, AlertTriangle, Plus, Calendar, Search } from "lucide-react";
-import type { Attendance } from "@/types/database";
+import { useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 
 const statusMap = {
-  present: { label: "Có mặt", variant: "success" as const },
+  present: { label: "Đúng giờ", variant: "success" as const },
   late: { label: "Đi trễ", variant: "warning" as const },
   absent: { label: "Vắng", variant: "error" as const },
-  half_day: { label: "Nửa ngày", variant: "info" as const },
 };
 
 export default function AttendancePage() {
   const { employee, isAdmin, isManager } = useAuth();
-  const supabase = createClient();
-  const [attendances, setAttendances] = useState<(Attendance & { employee?: { full_name: string } })[]>([]);
-  const [todayAttendance, setTodayAttendance] = useState<Attendance | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [checkInOpen, setCheckInOpen] = useState(false);
   const [month, setMonth] = useState(dayjs().format("YYYY-MM"));
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const today = dayjs().format("YYYY-MM-DD");
 
-  useEffect(() => {
-    loadAttendance();
-  }, [employee?.id, month, isAdmin, isManager]);
+  const { data: attendances = [], isLoading } = useAttendance({
+    employeeId: employee?.id,
+    month,
+    isAdmin,
+    isManager,
+  });
 
-  async function loadAttendance() {
-    if (!employee?.id) return;
-    setIsLoading(true);
-    try {
-      const startDate = dayjs(month + "-01").startOf("month").format("YYYY-MM-DD");
-      const endDate = dayjs(month + "-01").endOf("month").format("YYYY-MM-DD");
+  const { data: todayAttendance } = useTodayAttendance(employee?.id);
 
-      let query = supabase
-        .from("attendance")
-        .select(`*, employee:employees(full_name)`)
-        .gte("date", startDate)
-        .lte("date", endDate)
-        .order("date", { ascending: false });
-
-      if (!isAdmin && !isManager) {
-        query = query.eq("employee_id", employee.id);
-      }
-
-      const { data } = await query;
-      const attData = (data || []) as (Attendance & { employee?: { full_name: string } })[];
-      setAttendances(attData);
-
-      const todayRec = attData.find(
-        (a) => a.date === today && a.employee_id === employee.id
-      );
-      setTodayAttendance(todayRec || null);
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  const filtered = attendances.filter((a) =>
-    !search || (a.employee?.full_name || "").toLowerCase().includes(search.toLowerCase())
+  const filtered = useMemo(
+    () =>
+      attendances.filter(
+        (a) =>
+          !search ||
+          (a.employee?.full_name || "")
+            .toLowerCase()
+            .includes(search.toLowerCase())
+      ),
+    [attendances, search]
   );
 
-  const stats = {
-    present: attendances.filter((a) => a.employee_id === employee?.id && a.status === "present").length,
-    late: attendances.filter((a) => a.employee_id === employee?.id && a.status === "late").length,
-    absent: attendances.filter((a) => a.employee_id === employee?.id && a.status === "absent").length,
-  };
+  // Reset page khi filter thay đổi
+  const filterKey = `${month}-${search}`;
+  const prevFilterKey = useRef(filterKey);
+  if (prevFilterKey.current !== filterKey) {
+    prevFilterKey.current = filterKey;
+    if (page !== 1) setPage(1);
+  }
+
+  const paginatedData = useMemo(
+    () => filtered.slice((page - 1) * pageSize, page * pageSize),
+    [filtered, page, pageSize]
+  );
+
+  const stats = useMemo(() => {
+    const mine = attendances.filter((a) => a.employee_id === employee?.id);
+    return {
+      present: mine.filter((a) => a.status === "present" || a.status === "late").length,
+      late: mine.filter((a) => a.status === "late").length,
+      absent: mine.filter((a) => a.status === "absent").length,
+    };
+  }, [attendances, employee?.id]);
 
   const isCheckOut = !!(todayAttendance?.check_in && !todayAttendance?.check_out);
 
+  const columns = useMemo(() => {
+    const cols: Column<AttendanceWithEmployee>[] = [];
+
+    if (isAdmin || isManager) {
+      cols.push({
+        header: "Nhân viên",
+        cell: (row) => (
+          <span className="font-medium text-foreground">
+            {row.employee?.full_name || "\u2014"}
+          </span>
+        ),
+      });
+    }
+
+    cols.push(
+      {
+        header: "Ngày",
+        cell: (row) => <span className="text-foreground">{formatDate(row.date)}</span>,
+      },
+      {
+        header: "Vào ca",
+        cell: (row) => (
+          <span className="text-muted-foreground">
+            {row.check_in ? formatTime(row.check_in) : "\u2014"}
+          </span>
+        ),
+      },
+      {
+        header: "Ra ca",
+        cell: (row) => (
+          <span className="text-muted-foreground">
+            {row.check_out ? formatTime(row.check_out) : "\u2014"}
+          </span>
+        ),
+      },
+      {
+        header: "Giờ làm",
+        cell: (row) => (
+          <span className="text-muted-foreground">
+            {row.work_hours ? `${row.work_hours}h` : "\u2014"}
+          </span>
+        ),
+      },
+      {
+        header: "OT",
+        cell: (row) =>
+          row.overtime_hours && row.overtime_hours > 0 ? (
+            <span className="text-orange-600 dark:text-orange-400">
+              {row.overtime_hours}h
+            </span>
+          ) : (
+            <span className="text-muted-foreground">{"\u2014"}</span>
+          ),
+      },
+      {
+        header: "Trạng thái",
+        cell: (row) => (
+          <Badge variant={statusMap[row.status]?.variant || "default"}>
+            {statusMap[row.status]?.label || row.status}
+          </Badge>
+        ),
+      }
+    );
+
+    return cols;
+  }, [isAdmin, isManager]);
+
   return (
     <div className="space-y-5">
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <StatCard title="Có mặt" value={stats.present} subtitle="trong tháng" icon={CheckCircle} color="green" />
-        <StatCard title="Đi trễ" value={stats.late} subtitle="trong tháng" icon={AlertTriangle} color="yellow" />
-        <StatCard title="Vắng" value={stats.absent} subtitle="trong tháng" icon={XCircle} color="red" />
-      </div>
+      {/* Stats (không hiện cho admin) */}
+      {!isAdmin && (
+        <div className="grid grid-cols-3 gap-4">
+          <StatCard
+            title="Đúng giờ"
+            value={stats.present}
+            subtitle="trong tháng"
+            icon={CheckCircle}
+            color="green"
+          />
+          <StatCard
+            title="Đi trễ"
+            value={stats.late}
+            subtitle="trong tháng"
+            icon={AlertTriangle}
+            color="yellow"
+          />
+          <StatCard
+            title="Vắng"
+            value={stats.absent}
+            subtitle="trong tháng"
+            icon={XCircle}
+            color="red"
+          />
+        </div>
+      )}
 
       {/* Action bar */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap items-center gap-3">
+      <div className="bg-card rounded-xl ring-1 ring-border p-4 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <Calendar size={16} className="text-gray-400 flex-shrink-0" />
+          <Calendar size={16} className="text-muted-foreground shrink-0" />
           <input
             type="month"
             value={month}
             onChange={(e) => setMonth(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-border bg-card text-foreground rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
         {(isAdmin || isManager) && (
           <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Tìm nhân viên..."
-              className="pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="pl-8 pr-3 py-1.5 text-sm border border-border bg-card text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring placeholder:text-muted-foreground"
             />
           </div>
         )}
-        <Button
-          onClick={() => setCheckInOpen(true)}
-          disabled={todayAttendance?.check_out !== null && todayAttendance?.check_out !== undefined}
-          leftIcon={<Plus size={14} />}
-          size="sm"
-        >
-          {isCheckOut ? "Check-out" : "Check-in"}
-        </Button>
+        {!isAdmin && (
+          <Button
+            onClick={() => setCheckInOpen(true)}
+            disabled={
+              todayAttendance?.check_out !== null &&
+              todayAttendance?.check_out !== undefined
+            }
+            leftIcon={<Plus size={14} />}
+            size="sm"
+          >
+            {isCheckOut ? "Check-out" : "Check-in"}
+          </Button>
+        )}
       </div>
 
-      {/* Today status */}
-      {todayAttendance && (
-        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-center justify-between">
+      {/* Today status (không hiện cho admin) */}
+      {!isAdmin && todayAttendance && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-4 flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-blue-800">Hôm nay - {formatDate(today)}</p>
-            <div className="flex items-center gap-4 mt-1 text-sm text-blue-700">
+            <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+              Hôm nay - {formatDate(today)}
+            </p>
+            <div className="flex items-center gap-4 mt-1 text-sm text-blue-700 dark:text-blue-400">
               {todayAttendance.check_in && (
                 <span className="flex items-center gap-1">
                   <Clock size={13} /> Vào: {formatTime(todayAttendance.check_in)}
@@ -148,73 +242,38 @@ export default function AttendancePage() {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-800">Lịch sử chấm công</h3>
+      <div className="ring-1 ring-border rounded-xl overflow-hidden">
+        <div className="bg-card px-4 py-3 border-b border-border">
+          <h3 className="font-semibold text-foreground">Lịch sử chấm công</h3>
         </div>
-        {isLoading ? (
-          <div className="p-8 text-center text-gray-400">Đang tải...</div>
-        ) : filtered.length === 0 ? (
-          <EmptyState icon={Clock} title="Chưa có dữ liệu chấm công" />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  {(isAdmin || isManager) && <th className="text-left px-4 py-3 text-gray-500 font-medium">Nhân viên</th>}
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Ngày</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Vào ca</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Ra ca</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Giờ làm</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">OT</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filtered.map((a) => (
-                  <tr key={a.id} className="hover:bg-gray-50 transition-colors">
-                    {(isAdmin || isManager) && (
-                      <td className="px-4 py-3 font-medium text-gray-800">
-                        {a.employee?.full_name || "—"}
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-gray-700">{formatDate(a.date)}</td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {a.check_in ? formatTime(a.check_in) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {a.check_out ? formatTime(a.check_out) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {a.work_hours ? `${a.work_hours}h` : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {a.overtime_hours && a.overtime_hours > 0 ? (
-                        <span className="text-orange-600">{a.overtime_hours}h</span>
-                      ) : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={statusMap[a.status]?.variant || "default"}>
-                        {statusMap[a.status]?.label || a.status}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <DataTable
+          columns={columns}
+          data={paginatedData}
+          isLoading={isLoading}
+          emptyState={{
+            icon: Clock,
+            title: "Chưa có dữ liệu chấm công",
+          }}
+          pagination={{
+            page,
+            pageSize,
+            total: filtered.length,
+            onPageChange: setPage,
+          }}
+          pageSize={pageSize}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+          className="rounded-none ring-0"
+        />
       </div>
 
       {checkInOpen && (
         <CheckInModal
           open={checkInOpen}
           onClose={() => setCheckInOpen(false)}
-          currentAttendance={todayAttendance}
-          onSuccess={(att) => {
-            setTodayAttendance(att);
+          currentAttendance={todayAttendance ?? null}
+          onSuccess={() => {
             setCheckInOpen(false);
-            loadAttendance();
+            queryClient.invalidateQueries({ queryKey: ["attendance"] });
           }}
         />
       )}

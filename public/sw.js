@@ -2,7 +2,6 @@ const CACHE_NAME = "hr-app-v1";
 const STATIC_ASSETS = [
   "/",
   "/dashboard",
-  "/manifest.json",
 ];
 
 self.addEventListener("install", (event) => {

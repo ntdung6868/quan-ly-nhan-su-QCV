@@ -1,5 +1,5 @@
 export type Role = "admin" | "manager" | "employee";
-export type AttendanceStatus = "present" | "late" | "absent" | "half_day";
+export type AttendanceStatus = "present" | "late" | "absent";
 export type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
 export type TaskStatus = "todo" | "in_progress" | "done" | "cancelled";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
@@ -310,6 +310,7 @@ export interface CompanyConfig {
   photo_required: boolean;
   work_start_time: string;
   work_end_time: string;
+  late_after_time: string;
   standard_work_days: number;
   overtime_multiplier: number;
   created_at: string;

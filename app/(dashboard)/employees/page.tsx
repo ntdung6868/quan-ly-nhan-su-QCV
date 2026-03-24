@@ -1,20 +1,28 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useState, useEffect, useMemo } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { employeeSchema, type EmployeeFormValues } from "@/lib/validations";
+import {
+  useEmployees,
+  useCreateEmployee,
+  useUpdateEmployee,
+  useDeleteEmployee,
+  type EmployeeWithRels,
+} from "@/hooks/use-employees";
+import { useDepartments } from "@/hooks/use-departments";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
-import { formatDate, formatCurrency, getInitials } from "@/lib/utils";
-import { Users, Plus, Search, Edit2, Trash2, UserCheck } from "lucide-react";
+import { FormField } from "@/components/ui/form-field";
+import { Select } from "@/components/ui/select";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { formatDate, formatCurrency, getInitials, generateCredentials } from "@/lib/utils";
+import { CurrencyInput } from "@/components/ui/currency-input";
+import { Users, Plus, Search, Edit2, Trash2, Copy, Check, KeyRound } from "lucide-react";
 import { toast } from "sonner";
-import type { Employee, Department, Shift } from "@/types/database";
-
-type EmployeeWithRels = Employee & {
-  department?: Department;
-  shift?: Shift;
-};
 
 const statusMap = {
   active: { label: "Đang làm", variant: "success" as const },
@@ -23,260 +31,485 @@ const statusMap = {
 };
 
 export default function EmployeesPage() {
-  const supabase = createClient();
-  const [employees, setEmployees] = useState<EmployeeWithRels[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterDept, setFilterDept] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<EmployeeWithRels | null>(null);
-  const [form, setForm] = useState<Partial<Employee>>({});
-  const [isSaving, setIsSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<EmployeeWithRels | null>(null);
+  const [page, setPage] = useState(1);
+  const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [resetTarget, setResetTarget] = useState<EmployeeWithRels | null>(null);
+  const [resetResult, setResetResult] = useState<{ email: string; password: string } | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
+
+  const { data: employeesData, isLoading } = useEmployees({
+    search,
+    departmentId: filterDept || undefined,
+    status: filterStatus || undefined,
+    page,
+    pageSize: 50,
+  });
+  const { data: departmentsData } = useDepartments();
+
+  const employees = employeesData?.employees ?? [];
+  const total = employeesData?.total ?? 0;
+  const departments = departmentsData ?? [];
+
+  const createMutation = useCreateEmployee();
+  const updateMutation = useUpdateEmployee();
+  const deleteMutation = useDeleteEmployee();
+
+  const form = useForm<EmployeeFormValues>({
+    resolver: zodResolver(employeeSchema),
+    defaultValues: {
+      full_name: "",
+      phone: "",
+      date_of_birth: "",
+      position: "",
+      department_id: null,
+      hire_date: new Date().toISOString().split("T")[0],
+      base_salary: 0,
+      status: "active",
+      gender: undefined,
+      address: "",
+      bank_name: "",
+      bank_account: "",
+      tax_code: "",
+      insurance_code: "",
+    },
+  });
 
   useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
-    setIsLoading(true);
-    const [empRes, deptRes, shiftRes] = await Promise.all([
-      supabase.from("employees").select("*, department:departments(id,name), shift:shifts(id,name)")
-        .order("full_name"),
-      supabase.from("departments").select("*").order("name"),
-      supabase.from("shifts").select("*").order("name"),
-    ]);
-    setEmployees(empRes.data || []);
-    setDepartments(deptRes.data || []);
-    setShifts(shiftRes.data || []);
-    setIsLoading(false);
-  }
+    if (editingEmployee) {
+      form.reset({
+        full_name: editingEmployee.full_name,
+        phone: editingEmployee.phone ?? "",
+        date_of_birth: editingEmployee.date_of_birth ?? "",
+        position: editingEmployee.position ?? "",
+        department_id: editingEmployee.department_id ?? null,
+        hire_date: editingEmployee.hire_date,
+        base_salary: editingEmployee.base_salary,
+        status: editingEmployee.status,
+        gender: editingEmployee.gender ?? undefined,
+        address: editingEmployee.address ?? "",
+        bank_name: editingEmployee.bank_name ?? "",
+        bank_account: editingEmployee.bank_account ?? "",
+        tax_code: editingEmployee.tax_code ?? "",
+        insurance_code: editingEmployee.insurance_code ?? "",
+      });
+    } else {
+      form.reset({
+        full_name: "",
+          phone: "",
+        date_of_birth: "",
+        position: "",
+        department_id: null,
+          hire_date: new Date().toISOString().split("T")[0],
+        base_salary: 0,
+        status: "active",
+        gender: undefined,
+        address: "",
+        bank_name: "",
+        bank_account: "",
+        tax_code: "",
+        insurance_code: "",
+      });
+    }
+  }, [editingEmployee, form]);
 
   function openCreate() {
     setEditingEmployee(null);
-    setForm({ status: "active", hire_date: new Date().toISOString().split("T")[0] });
     setModalOpen(true);
   }
 
   function openEdit(emp: EmployeeWithRels) {
     setEditingEmployee(emp);
-    setForm({ ...emp });
     setModalOpen(true);
   }
 
-  async function handleSave() {
-    if (!form.full_name || !form.email || !form.hire_date) {
-      toast.error("Vui lòng điền đầy đủ thông tin bắt buộc");
-      return;
+  function onSubmit(values: EmployeeFormValues) {
+    if (editingEmployee) {
+      updateMutation.mutate(
+        { id: editingEmployee.id, ...values },
+        {
+          onSuccess: () => {
+            toast.success("Cập nhật nhân viên thành công");
+            setModalOpen(false);
+            form.reset();
+          },
+          onError: (err) => toast.error(err.message),
+        }
+      );
+    } else {
+      createMutation.mutate(values, {
+        onSuccess: (data) => {
+          setModalOpen(false);
+          form.reset();
+          const creds = (data as Record<string, unknown>)._credentials as { email: string; password: string } | undefined;
+          if (creds) {
+            setCreatedCredentials(creds);
+          } else {
+            toast.success("Thêm nhân viên thành công");
+          }
+        },
+        onError: (err) => toast.error(err.message),
+      });
     }
-    setIsSaving(true);
+  }
+
+  async function handleResetPassword() {
+    if (!resetTarget?.user_id) return;
+    setIsResetting(true);
     try {
-      if (editingEmployee) {
-        const { error } = await supabase.from("employees").update(form).eq("id", editingEmployee.id);
-        if (error) throw error;
-        toast.success("Cập nhật nhân viên thành công");
-      } else {
-        const code = `EMP${String(Date.now()).slice(-5)}`;
-        const { error } = await supabase.from("employees").insert({ ...form, employee_code: code } as Employee);
-        if (error) throw error;
-        toast.success("Thêm nhân viên thành công");
-      }
-      setModalOpen(false);
-      loadData();
-    } catch (e: unknown) {
-      toast.error((e as Error).message || "Có lỗi xảy ra");
+      const { generateCredentials } = await import("@/lib/utils");
+      const { email, password } = generateCredentials(resetTarget.full_name);
+      const res = await fetch("/api/employees/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: resetTarget.user_id, new_password: password }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setResetTarget(null);
+      setResetResult({ email, password });
+    } catch (err) {
+      toast.error((err as Error).message || "Lỗi đặt lại mật khẩu");
     } finally {
-      setIsSaving(false);
+      setIsResetting(false);
     }
   }
 
-  async function handleDelete(emp: EmployeeWithRels) {
-    if (!confirm(`Xoá nhân viên "${emp.full_name}"?`)) return;
-    const { error } = await supabase.from("employees").delete().eq("id", emp.id);
-    if (error) { toast.error("Không thể xoá nhân viên"); return; }
-    toast.success("Đã xoá nhân viên");
-    loadData();
-  }
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+  const watchName = form.watch("full_name") || "";
 
-  const filtered = employees.filter((e) => {
-    const matchSearch = !search || e.full_name.toLowerCase().includes(search.toLowerCase()) || e.email.toLowerCase().includes(search.toLowerCase()) || e.employee_code.includes(search);
-    const matchDept = !filterDept || e.department_id === filterDept;
-    const matchStatus = !filterStatus || e.status === filterStatus;
-    return matchSearch && matchDept && matchStatus;
-  });
+  const deptOptions = useMemo(
+    () => departments.map((d) => ({ value: d.id, label: d.name })),
+    [departments]
+  );
+
+  const columns: Column<EmployeeWithRels>[] = [
+    {
+      header: "Nhân viên",
+      cell: (emp) => (
+        <div className="flex items-center gap-3">
+          {emp.avatar_url ? (
+            <img src={emp.avatar_url} alt={emp.full_name} className="w-8 h-8 rounded-full object-cover" />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
+              {getInitials(emp.full_name)}
+            </div>
+          )}
+          <div>
+            <p className="font-medium text-foreground">{emp.full_name}</p>
+            <p className="text-xs text-muted-foreground">{emp.email}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: "Mã NV",
+      cell: (emp) => <span className="text-muted-foreground font-mono text-xs">{emp.employee_code}</span>,
+    },
+    {
+      header: "Phòng ban",
+      cell: (emp) => <span className="text-muted-foreground">{emp.department?.name || "\u2014"}</span>,
+    },
+    {
+      header: "Chức vụ",
+      cell: (emp) => <span className="text-muted-foreground">{emp.position || "\u2014"}</span>,
+    },
+    {
+      header: "Ngày vào",
+      cell: (emp) => <span className="text-muted-foreground">{formatDate(emp.hire_date)}</span>,
+    },
+    {
+      header: "Lương",
+      cell: (emp) => <span className="text-foreground font-medium">{formatCurrency(emp.base_salary)}</span>,
+    },
+    {
+      header: "Trạng thái",
+      cell: (emp) => (
+        <Badge variant={statusMap[emp.status]?.variant || "default"}>
+          {statusMap[emp.status]?.label || emp.status}
+        </Badge>
+      ),
+    },
+    {
+      header: "Thao tác",
+      cell: (emp) => (
+        <div className="flex items-center gap-1">
+          <button onClick={() => openEdit(emp)} className="p-1.5 hover:bg-accent rounded text-primary transition" title="Sửa">
+            <Edit2 size={14} />
+          </button>
+          <button onClick={() => setResetTarget(emp)} className="p-1.5 hover:bg-accent rounded text-orange-500 transition" title="Đặt lại mật khẩu">
+            <KeyRound size={14} />
+          </button>
+          <button onClick={() => setDeleteTarget(emp)} className="p-1.5 hover:bg-destructive/10 rounded text-destructive transition" title="Xoá">
+            <Trash2 size={14} />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-5">
       {/* Toolbar */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-40">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm nhân viên..."
-            className="pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full" />
+      <div className="bg-card rounded-xl ring-1 ring-border p-3 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-40 max-w-xs">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Tìm nhân viên..."
+            className="input pl-9! py-1.5"
+          />
         </div>
-        <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">Tất cả phòng ban</option>
-          {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">Tất cả trạng thái</option>
-          <option value="active">Đang làm</option>
-          <option value="inactive">Nghỉ việc</option>
-          <option value="on_leave">Đang nghỉ</option>
-        </select>
-        <span className="text-sm text-gray-500">{filtered.length} nhân viên</span>
+        <Select
+          value={filterDept}
+          onValueChange={(v) => { setFilterDept(v); setPage(1); }}
+          placeholder="Tất cả phòng ban"
+          options={[{ value: "", label: "Tất cả phòng ban" }, ...deptOptions]}
+          className="w-40"
+        />
+        <Select
+          value={filterStatus}
+          onValueChange={(v) => { setFilterStatus(v); setPage(1); }}
+          placeholder="Tất cả trạng thái"
+          options={[
+            { value: "", label: "Tất cả trạng thái" },
+            { value: "active", label: "Đang làm" },
+            { value: "inactive", label: "Nghỉ việc" },
+            { value: "on_leave", label: "Đang nghỉ" },
+          ]}
+          className="w-40"
+        />
+        <span className="text-sm text-muted-foreground ml-auto">{total} nhân viên</span>
         <Button onClick={openCreate} leftIcon={<Plus size={14} />} size="sm">Thêm nhân viên</Button>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {isLoading ? (
-          <div className="p-8 text-center text-gray-400">Đang tải...</div>
-        ) : filtered.length === 0 ? (
-          <EmptyState icon={Users} title="Không có nhân viên" action={<Button onClick={openCreate} leftIcon={<Plus size={14} />} size="sm">Thêm ngay</Button>} />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Nhân viên</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Mã NV</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Phòng ban</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Chức vụ</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Ngày vào</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Lương</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Trạng thái</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filtered.map((emp) => (
-                  <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        {emp.avatar_url ? (
-                          <img src={emp.avatar_url} alt={emp.full_name} className="w-8 h-8 rounded-full object-cover" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                            {getInitials(emp.full_name)}
-                          </div>
-                        )}
-                        <div>
-                          <p className="font-medium text-gray-800">{emp.full_name}</p>
-                          <p className="text-xs text-gray-400">{emp.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 font-mono text-xs">{emp.employee_code}</td>
-                    <td className="px-4 py-3 text-gray-600">{emp.department?.name || "—"}</td>
-                    <td className="px-4 py-3 text-gray-600">{emp.position || "—"}</td>
-                    <td className="px-4 py-3 text-gray-600">{formatDate(emp.hire_date)}</td>
-                    <td className="px-4 py-3 text-gray-700 font-medium">{formatCurrency(emp.base_salary)}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={statusMap[emp.status]?.variant || "default"}>
-                        {statusMap[emp.status]?.label || emp.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => openEdit(emp)} className="p-1.5 hover:bg-blue-50 rounded text-blue-600 transition"><Edit2 size={14} /></button>
-                        <button onClick={() => handleDelete(emp)} className="p-1.5 hover:bg-red-50 rounded text-red-500 transition"><Trash2 size={14} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <DataTable
+        columns={columns}
+        data={employees}
+        isLoading={isLoading}
+        emptyState={{
+          icon: Users,
+          title: "Không có nhân viên",
+          action: <Button onClick={openCreate} leftIcon={<Plus size={14} />} size="sm">Thêm ngay</Button>,
+        }}
+        pagination={{
+          page,
+          pageSize: 50,
+          total,
+          onPageChange: setPage,
+        }}
+      />
+
+      {/* Create/Edit Modal */}
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editingEmployee ? "Cập nhật nhân viên" : "Thêm nhân viên mới"}
+        size="lg"
+      >
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Họ tên" required error={form.formState.errors.full_name?.message} className="col-span-2">
+              <input {...form.register("full_name")} className="input" placeholder="VD: Nguyễn Trí Dũng" />
+            </FormField>
+            {!editingEmployee && watchName.trim().length > 1 && (
+              <div className="col-span-2 -mt-2 px-1">
+                <p className="text-xs text-muted-foreground">
+                  Tài khoản: <span className="font-mono text-primary">{generateCredentials(watchName).email}</span>
+                </p>
+              </div>
+            )}
+            <FormField label="Số điện thoại" error={form.formState.errors.phone?.message}>
+              <input {...form.register("phone")} className="input" />
+            </FormField>
+            <FormField label="Ngày sinh" error={form.formState.errors.date_of_birth?.message}>
+              <input type="date" {...form.register("date_of_birth")} className="input" />
+            </FormField>
+            <FormField label="Giới tính" error={form.formState.errors.gender?.message}>
+              <Select
+                value={form.watch("gender") ?? ""}
+                onValueChange={(v) => form.setValue("gender", (v || undefined) as EmployeeFormValues["gender"])}
+                placeholder="Chọn giới tính"
+                options={[
+                  { value: "", label: "Chọn giới tính" },
+                  { value: "male", label: "Nam" },
+                  { value: "female", label: "Nữ" },
+                  { value: "other", label: "Khác" },
+                ]}
+              />
+            </FormField>
+            <FormField label="Chức vụ" error={form.formState.errors.position?.message}>
+              <input {...form.register("position")} className="input" />
+            </FormField>
+            <FormField label="Phòng ban">
+              <Select
+                value={form.watch("department_id") ?? ""}
+                onValueChange={(v) => form.setValue("department_id", v || null)}
+                placeholder="Chọn phòng ban"
+                options={[{ value: "", label: "Chọn phòng ban" }, ...deptOptions]}
+              />
+            </FormField>
+            <FormField label="Ngày vào làm" required error={form.formState.errors.hire_date?.message}>
+              <input type="date" {...form.register("hire_date")} className="input" />
+            </FormField>
+            <FormField label="Lương cơ bản (VNĐ)" error={form.formState.errors.base_salary?.message}>
+              <CurrencyInput
+                value={form.watch("base_salary") || 0}
+                onChange={(v) => form.setValue("base_salary", v)}
+              />
+            </FormField>
+            <FormField label="Trạng thái" error={form.formState.errors.status?.message}>
+              <Select
+                value={form.watch("status") ?? "active"}
+                onValueChange={(v) => form.setValue("status", v as EmployeeFormValues["status"])}
+                options={[
+                  { value: "active", label: "Đang làm việc" },
+                  { value: "inactive", label: "Nghỉ việc" },
+                  { value: "on_leave", label: "Đang nghỉ phép" },
+                ]}
+              />
+            </FormField>
+            <FormField label="Địa chỉ" error={form.formState.errors.address?.message} className="col-span-2">
+              <input {...form.register("address")} className="input" />
+            </FormField>
+
+            {/* Ngân hàng & Bảo hiểm */}
+            <div className="col-span-2 border-t border-border pt-4 mt-1">
+              <p className="text-sm font-medium text-muted-foreground mb-3">Ngân hàng & Bảo hiểm</p>
+            </div>
+            <FormField label="Ngân hàng" error={form.formState.errors.bank_name?.message}>
+              <input {...form.register("bank_name")} className="input" placeholder="VD: Vietcombank" />
+            </FormField>
+            <FormField label="Số tài khoản" error={form.formState.errors.bank_account?.message}>
+              <input {...form.register("bank_account")} className="input" />
+            </FormField>
+            <FormField label="Mã số thuế" error={form.formState.errors.tax_code?.message}>
+              <input {...form.register("tax_code")} className="input" />
+            </FormField>
+            <FormField label="Mã BHXH" error={form.formState.errors.insurance_code?.message}>
+              <input {...form.register("insurance_code")} className="input" />
+            </FormField>
+          </div>
+          <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-border">
+            <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Huỷ</Button>
+            <Button loading={isSaving} type="submit">
+              {editingEmployee ? "Cập nhật" : "Thêm mới"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete Confirm */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title={`Xoá "${deleteTarget?.full_name}"?`}
+        description="Hành động này không thể hoàn tác."
+        variant="danger"
+        confirmText="Xoá"
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          deleteMutation.mutate(deleteTarget!.id, {
+            onSuccess: () => {
+              toast.success("Đã xoá nhân viên");
+              setDeleteTarget(null);
+            },
+            onError: (err) => toast.error(err.message),
+          });
+        }}
+      />
+
+      {/* Reset Password Confirm */}
+      <ConfirmDialog
+        open={!!resetTarget}
+        onOpenChange={(open) => !open && setResetTarget(null)}
+        title={`Đặt lại mật khẩu "${resetTarget?.full_name}"?`}
+        description="Mật khẩu sẽ được đặt lại về mặc định theo tên nhân viên."
+        confirmText="Đặt lại"
+        onConfirm={handleResetPassword}
+        loading={isResetting}
+      />
+
+      {/* Reset Result Modal */}
+      <Modal
+        open={!!resetResult}
+        onClose={() => setResetResult(null)}
+        title="Đặt lại mật khẩu thành công"
+        size="sm"
+      >
+        {resetResult && (
+          <div className="space-y-4">
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4 text-center">
+              <Check size={32} className="text-green-600 dark:text-green-400 mx-auto mb-2" />
+              <p className="text-sm font-medium text-green-800 dark:text-green-300">
+                Mật khẩu đã được đặt lại
+              </p>
+            </div>
+            <div className="space-y-3">
+              <CredentialRow label="Email" value={resetResult.email} />
+              <CredentialRow label="Mật khẩu" value={resetResult.password} />
+            </div>
+            <div className="flex justify-end pt-2">
+              <Button onClick={() => setResetResult(null)}>Đóng</Button>
+            </div>
           </div>
         )}
-      </div>
-
-      {/* Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)}
-        title={editingEmployee ? "Cập nhật nhân viên" : "Thêm nhân viên mới"} size="lg">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Họ tên *</label>
-            <input value={form.full_name || ""} onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-            <input type="email" value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
-            <input value={form.phone || ""} onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Chức vụ</label>
-            <input value={form.position || ""} onChange={(e) => setForm({ ...form, position: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phòng ban</label>
-            <select value={form.department_id || ""} onChange={(e) => setForm({ ...form, department_id: e.target.value || null })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">Chọn phòng ban</option>
-              {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Ca làm việc</label>
-            <select value={form.shift_id || ""} onChange={(e) => setForm({ ...form, shift_id: e.target.value || null })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">Chọn ca</option>
-              {shifts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Ngày vào làm *</label>
-            <input type="date" value={form.hire_date || ""} onChange={(e) => setForm({ ...form, hire_date: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Lương cơ bản (VNĐ)</label>
-            <input type="number" value={form.base_salary || 0} onChange={(e) => setForm({ ...form, base_salary: Number(e.target.value) })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái</label>
-            <select value={form.status || "active"} onChange={(e) => setForm({ ...form, status: e.target.value as Employee["status"] })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="active">Đang làm việc</option>
-              <option value="inactive">Nghỉ việc</option>
-              <option value="on_leave">Đang nghỉ phép</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Giới tính</label>
-            <select value={form.gender || ""} onChange={(e) => setForm({ ...form, gender: e.target.value as Employee["gender"] })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">Chọn giới tính</option>
-              <option value="male">Nam</option>
-              <option value="female">Nữ</option>
-              <option value="other">Khác</option>
-            </select>
-          </div>
-          <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ</label>
-            <input value={form.address || ""} onChange={(e) => setForm({ ...form, address: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
-          <Button variant="secondary" onClick={() => setModalOpen(false)}>Huỷ</Button>
-          <Button loading={isSaving} onClick={handleSave}>
-            {editingEmployee ? "Cập nhật" : "Thêm mới"}
-          </Button>
-        </div>
       </Modal>
+
+      {/* Credentials Modal */}
+      <Modal
+        open={!!createdCredentials}
+        onClose={() => setCreatedCredentials(null)}
+        title="Tạo nhân viên thành công"
+        size="sm"
+      >
+        {createdCredentials && (
+          <div className="space-y-4">
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4 text-center">
+              <Check size={32} className="text-green-600 dark:text-green-400 mx-auto mb-2" />
+              <p className="text-sm font-medium text-green-800 dark:text-green-300">
+                Tài khoản đã được tạo tự động
+              </p>
+            </div>
+            <div className="space-y-3">
+              <CredentialRow label="Email" value={createdCredentials.email} />
+              <CredentialRow label="Mật khẩu" value={createdCredentials.password} />
+            </div>
+            <div className="flex justify-end pt-2">
+              <Button onClick={() => setCreatedCredentials(null)}>Đóng</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+function CredentialRow({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  function handleCopy() {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+  return (
+    <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2.5">
+      <span className="text-xs text-muted-foreground w-16 shrink-0">{label}</span>
+      <span className="text-sm font-mono font-medium text-foreground flex-1 truncate">{value}</span>
+      <button
+        onClick={handleCopy}
+        className="p-1.5 hover:bg-accent rounded text-muted-foreground hover:text-foreground transition shrink-0"
+        title="Copy"
+      >
+        {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
+      </button>
     </div>
   );
 }
