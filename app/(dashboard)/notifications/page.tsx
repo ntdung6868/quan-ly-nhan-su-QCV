@@ -69,7 +69,7 @@ export default function NotificationsPage() {
           table: "notifications",
           filter: `user_id=eq.${profile.id}`,
         },
-        (payload) => {
+        (payload: { new: unknown }) => {
           queryClient.invalidateQueries({ queryKey: ["notifications", profile.id] });
           toast.info((payload.new as Notification).title);
         }

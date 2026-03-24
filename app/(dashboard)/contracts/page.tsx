@@ -80,7 +80,7 @@ export default function ContractsPage() {
         .from("employees")
         .select("id,full_name")
         .eq("status", "active")
-        .then(({ data }) => setEmployees((data as Employee[]) || []));
+        .then(({ data }: { data: Employee[] | null }) => setEmployees(data || []));
     }
   }, [isAdmin]);
 

@@ -89,9 +89,9 @@ export function useReportData(year: number) {
 
       // --- Summary ---
       const totalEmployees = employees.length;
-      const totalPayroll = payslips.reduce((s, p) => s + p.net_salary, 0);
+      const totalPayroll = payslips.reduce((s: number, p: { net_salary: number }) => s + p.net_salary, 0);
       const totalLeaves = leaves.filter(
-        (l) => l.status === "approved"
+        (l: { status: string }) => l.status === "approved"
       ).length;
 
       // --- Monthly attendance: group by month client-side ---
@@ -138,7 +138,7 @@ export function useReportData(year: number) {
 
       // --- Monthly salary ---
       const monthlyMap = new Map<number, { gross: number; net: number }>();
-      payslips.forEach((p) => {
+      payslips.forEach((p: { month: number; gross_salary: number; net_salary: number }) => {
         const existing = monthlyMap.get(p.month) || { gross: 0, net: 0 };
         monthlyMap.set(p.month, {
           gross: existing.gross + p.gross_salary,
@@ -155,7 +155,7 @@ export function useReportData(year: number) {
 
       // --- Department distribution ---
       const deptMap = new Map<string, number>();
-      employees.forEach((e) => {
+      employees.forEach((e: { department_id?: string }) => {
         if (e.department_id) {
           deptMap.set(
             e.department_id,
@@ -164,17 +164,17 @@ export function useReportData(year: number) {
         }
       });
       const departmentData: DepartmentData[] = departments
-        .map((d) => ({
+        .map((d: { id: string; name: string }) => ({
           name: d.name,
           count: deptMap.get(d.id) || 0,
         }))
-        .filter((d) => d.count > 0);
+        .filter((d: { count: number }) => d.count > 0);
 
       // --- Leave statistics by type ---
       const leaveTypeMap = new Map<string, number>();
       leaves
-        .filter((l) => l.status === "approved")
-        .forEach((l) => {
+        .filter((l: { status: string }) => l.status === "approved")
+        .forEach((l: { status: string; leave_type: unknown }) => {
           const typeName =
             (l.leave_type as unknown as { name: string } | null)?.name ||
             "Khác";

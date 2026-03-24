@@ -34,7 +34,7 @@ export function Header({ onMenuClick, title }: HeaderProps) {
       .eq("user_id", profile.id)
       .order("created_at", { ascending: false })
       .limit(20)
-      .then(({ data }) => setNotifications(data || []));
+      .then(({ data }: { data: Notification[] | null }) => setNotifications(data || []));
 
     // Realtime: INSERT, UPDATE, DELETE
     const channel = supabase
@@ -47,7 +47,7 @@ export function Header({ onMenuClick, title }: HeaderProps) {
           table: "notifications",
           filter: `user_id=eq.${profile.id}`,
         },
-        (payload) => {
+        (payload: { eventType: string; new: unknown; old: unknown }) => {
           if (payload.eventType === "INSERT") {
             setNotifications((prev) => [payload.new as Notification, ...prev]);
           } else if (payload.eventType === "UPDATE") {

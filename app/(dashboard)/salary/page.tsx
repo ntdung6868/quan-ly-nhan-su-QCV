@@ -63,7 +63,7 @@ export default function SalaryPage() {
         .from("employees")
         .select("*")
         .eq("status", "active")
-        .then(({ data }) => setEmployees(data || []));
+        .then(({ data }: { data: Employee[] | null }) => setEmployees(data || []));
     }
   }, [isAdmin]);
 
@@ -137,7 +137,7 @@ export default function SalaryPage() {
             .eq("employee_id", emp.id);
 
           const totalAllowances = (allowancesData || []).reduce(
-            (s, a) => s + a.amount,
+            (s: number, a: { amount: number }) => s + a.amount,
             0
           );
           const baseSalary = emp.base_salary;
@@ -147,7 +147,7 @@ export default function SalaryPage() {
           const overtimePay =
             (baseSalary / (workDays * 8)) * overtimeHours * 1.5;
 
-          const totalDeductions = (deductionsData || []).reduce((s, d) => {
+          const totalDeductions = (deductionsData || []).reduce((s: number, d: { percentage?: number; amount?: number }) => {
             if (d.percentage) return s + baseSalary * (d.percentage / 100);
             return s + (d.amount || 0);
           }, 0);
