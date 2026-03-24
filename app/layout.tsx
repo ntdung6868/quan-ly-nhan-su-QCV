@@ -9,13 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "HR Management System",
-  description: "Hệ thống quản lý nhân sự toàn diện",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "HR System",
-  },
+  title: "HR Management - QCV",
+  description: "Hệ thống quản lý nhân sự - Quảng Cáo Việt",
 };
 
 export const viewport: Viewport = {
