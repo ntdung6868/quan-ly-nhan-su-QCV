@@ -10,7 +10,6 @@ export const companyConfigSchema = z.object({
   gps_lat: z.number().nullable(),
   gps_lng: z.number().nullable(),
   gps_radius: z.number().min(0, "Bán kính GPS không được âm"),
-  photo_required: z.boolean({ error: "Giá trị yêu cầu ảnh không hợp lệ" }),
   work_start_time: z.string().min(1, "Giờ bắt đầu là bắt buộc"),
   work_end_time: z.string().min(1, "Giờ kết thúc là bắt buộc"),
   late_after_time: z.string().min(1, "Giờ tính trễ là bắt buộc"),

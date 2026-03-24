@@ -112,8 +112,6 @@ create table attendance (
   check_in_lng numeric(10,7),
   check_out_lat numeric(10,7),
   check_out_lng numeric(10,7),
-  check_in_photo text,
-  check_out_photo text,
   status text not null default 'present' check (status in ('present', 'late', 'absent')),
   work_hours numeric(5,2),
   overtime_hours numeric(5,2) default 0,
@@ -286,7 +284,6 @@ create table company_config (
   gps_lat numeric(10,7),
   gps_lng numeric(10,7),
   gps_radius int default 100,
-  photo_required boolean default false,
   work_start_time time default '08:00',
   work_end_time time default '17:00',
   late_after_time time default '08:15',
@@ -761,13 +758,13 @@ insert into deductions (name, code, percentage, description) values
 
 insert into company_config (
   company_name, address, phone, email,
-  gps_enabled, gps_lat, gps_lng, gps_radius, photo_required,
+  gps_enabled, gps_lat, gps_lng, gps_radius,
   work_start_time, work_end_time, late_after_time, standard_work_days, overtime_multiplier
 ) values (
   'Công Ty CP SX TM & DV Quảng Cáo Việt',
   '1A Đào Trinh Nhất, Khu phố 55, Linh Xuân, TPHCM',
   '0906862738', 'sale@trangtri360.com',
-  true, 10.8625148, 106.7607988, 100, true,
+  true, 10.8625148, 106.7607988, 100,
   '08:00', '17:00', '09:00', 26, 1.5
 );
 

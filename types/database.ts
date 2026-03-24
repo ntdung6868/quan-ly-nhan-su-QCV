@@ -307,7 +307,6 @@ export interface CompanyConfig {
   gps_lat: number | null;
   gps_lng: number | null;
   gps_radius: number;
-  photo_required: boolean;
   work_start_time: string;
   work_end_time: string;
   late_after_time: string;

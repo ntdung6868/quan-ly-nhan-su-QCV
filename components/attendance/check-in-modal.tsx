@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { Camera, MapPin, CheckCircle2, CircleCheck, CircleX, AlertCircle } from "lucide-react";
+import { MapPin, CheckCircle2, CircleCheck, CircleX, AlertCircle } from "lucide-react";
 import type { Attendance, CompanyConfig } from "@/types/database";
 
 interface CheckInModalProps {
@@ -19,10 +19,6 @@ interface CheckInModalProps {
 export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: CheckInModalProps) {
   const { employee } = useAuth();
   const supabase = createClient();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const [photoData, setPhotoData] = useState<string | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationError, setLocationError] = useState("");
   const [config, setConfig] = useState<CompanyConfig | null>(null);
@@ -37,9 +33,6 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
       getLocation();
       checkTodayLeave();
     }
-    return () => {
-      stream?.getTracks().forEach((t) => t.stop());
-    };
   }, [open]);
 
   async function checkTodayLeave() {
@@ -60,29 +53,6 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
   async function loadConfig() {
     const { data } = await supabase.from("company_config").select("*").single();
     setConfig(data);
-    if (data?.photo_required) startCamera();
-  }
-
-  async function startCamera() {
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-      setStream(mediaStream);
-      if (videoRef.current) videoRef.current.srcObject = mediaStream;
-    } catch {
-      toast.error("Không thể mở camera");
-    }
-  }
-
-  function capturePhoto() {
-    if (!videoRef.current || !canvasRef.current) return;
-    const ctx = canvasRef.current.getContext("2d");
-    if (!ctx) return;
-    canvasRef.current.width = videoRef.current.videoWidth;
-    canvasRef.current.height = videoRef.current.videoHeight;
-    ctx.drawImage(videoRef.current, 0, 0);
-    setPhotoData(canvasRef.current.toDataURL("image/jpeg", 0.8));
-    stream?.getTracks().forEach((t) => t.stop());
-    setStream(null);
   }
 
   function getLocation() {
@@ -108,18 +78,6 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
   const gpsRadius = config?.gps_radius || 100;
   const isInRange = config?.gps_enabled ? (gpsDistance !== null && gpsDistance <= gpsRadius) : true;
 
-  async function uploadPhoto(): Promise<string | null> {
-    if (!photoData || !employee) return null;
-    const blob = await (await fetch(photoData)).blob();
-    const fileName = `${employee.id}/${Date.now()}.jpg`;
-    const { data, error } = await supabase.storage
-      .from("attendance-photos")
-      .upload(fileName, blob, { contentType: "image/jpeg" });
-    if (error) return null;
-    const { data: urlData } = supabase.storage.from("attendance-photos").getPublicUrl(data.path);
-    return urlData.publicUrl;
-  }
-
   async function handleSubmit() {
     if (!employee) return;
     if (!isCheckOut && todayLeave) {
@@ -130,18 +88,12 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
       toast.error("Bạn đang ngoài phạm vi chấm công cho phép");
       return;
     }
-    if (config?.photo_required && !photoData) {
-      toast.error("Vui lòng chụp ảnh xác nhận");
-      return;
-    }
     setIsLoading(true);
     try {
-      const photoUrl = await uploadPhoto();
       const now = new Date().toISOString();
       const today = now.split("T")[0];
 
       if (!isCheckOut) {
-        // Tính trạng thái trễ dựa trên late_after_time
         let status: "present" | "late" = "present";
         if (config?.late_after_time) {
           const [h, m] = config.late_after_time.split(":").map(Number);
@@ -159,7 +111,6 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
             check_in: now,
             check_in_lat: location?.lat,
             check_in_lng: location?.lng,
-            check_in_photo: photoUrl,
             status,
             notes: notes || null,
           })
@@ -173,8 +124,7 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
         const checkInTime = new Date(currentAttendance.check_in!);
         const checkOutTime = new Date(now);
         const workHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
-        const standardHours = 8;
-        const overtime = Math.max(0, workHours - standardHours);
+        const overtime = Math.max(0, workHours - 8);
 
         const { data, error } = await supabase
           .from("attendance")
@@ -182,7 +132,6 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
             check_out: now,
             check_out_lat: location?.lat,
             check_out_lng: location?.lng,
-            check_out_photo: photoUrl,
             work_hours: Math.round(workHours * 100) / 100,
             overtime_hours: Math.round(overtime * 100) / 100,
           })
@@ -208,43 +157,6 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
           <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">
             <AlertCircle size={16} className="shrink-0" />
             <span>Hôm nay bạn đang nghỉ <strong>{todayLeave}</strong>. Không thể check-in.</span>
-          </div>
-        )}
-
-        {/* Camera */}
-        {(config?.photo_required || stream || photoData) && (
-          <div className="rounded-xl overflow-hidden bg-foreground aspect-video relative">
-            {!photoData ? (
-              <>
-                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                {stream && (
-                  <button
-                    onClick={capturePhoto}
-                    className="absolute bottom-3 left-1/2 -translate-x-1/2 w-12 h-12 bg-card rounded-full flex items-center justify-center shadow-lg hover:bg-accent transition"
-                  >
-                    <Camera size={20} className="text-foreground" />
-                  </button>
-                )}
-                {!stream && config?.photo_required && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Button onClick={startCamera} leftIcon={<Camera size={14} />}>
-                      Bật camera
-                    </Button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <img src={photoData} alt="Ảnh chấm công" className="w-full h-full object-cover" />
-                <button
-                  onClick={() => { setPhotoData(null); startCamera(); }}
-                  className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded"
-                >
-                  Chụp lại
-                </button>
-              </>
-            )}
-            <canvas ref={canvasRef} className="hidden" />
           </div>
         )}
 

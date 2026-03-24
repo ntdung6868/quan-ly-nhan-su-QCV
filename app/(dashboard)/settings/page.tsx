@@ -40,7 +40,6 @@ export default function SettingsPage() {
       gps_lat: null,
       gps_lng: null,
       gps_radius: 100,
-      photo_required: false,
       work_start_time: "08:00",
       work_end_time: "17:00",
       late_after_time: "08:15",
@@ -73,7 +72,6 @@ export default function SettingsPage() {
         gps_lat: companyData.gps_lat ?? null,
         gps_lng: companyData.gps_lng ?? null,
         gps_radius: companyData.gps_radius ?? 100,
-        photo_required: companyData.photo_required ?? false,
         work_start_time: companyData.work_start_time ?? "08:00",
         work_end_time: companyData.work_end_time ?? "17:00",
         late_after_time: companyData.late_after_time ?? "08:15",
@@ -231,14 +229,6 @@ export default function SettingsPage() {
                       </FormField>
                     </div>
                   )}
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      {...companyForm.register("photo_required")}
-                      className="w-4 h-4 rounded"
-                    />
-                    <span className="text-sm text-foreground">Bắt buộc chụp ảnh khi chấm công</span>
-                  </label>
                 </div>
               </div>
 
