@@ -330,13 +330,6 @@ export default function EmployeesPage() {
             <FormField label="Họ tên" required error={form.formState.errors.full_name?.message} className="col-span-2">
               <input {...form.register("full_name")} className="input" placeholder="VD: Nguyễn Trí Dũng" />
             </FormField>
-            {!editingEmployee && watchName.trim().length > 1 && (
-              <div className="col-span-2 -mt-2 px-1">
-                <p className="text-xs text-muted-foreground">
-                  Tài khoản: <span className="font-mono text-primary">{generateCredentials(watchName).email}</span>
-                </p>
-              </div>
-            )}
             <FormField label="Số điện thoại" error={form.formState.errors.phone?.message}>
               <input {...form.register("phone")} className="input" />
             </FormField>
