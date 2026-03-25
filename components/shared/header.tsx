@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { Menu, Bell, Sun, Moon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import type { Notification } from "@/types/database";
 import { formatDateTime, cn, getInitials } from "@/lib/utils";
@@ -27,6 +28,7 @@ export function Header({ onMenuClick, title }: HeaderProps) {
   const { profile, employee } = useAuth();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -100,6 +102,7 @@ export function Header({ onMenuClick, title }: HeaderProps) {
     if (!notif.is_read) {
       await supabase.from("notifications").update({ is_read: true }).eq("id", notif.id);
       setNotifications((prev) => prev.map((n) => n.id === notif.id ? { ...n, is_read: true } : n));
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
     }
     // Navigate
     setShowNotifs(false);
@@ -114,6 +117,7 @@ export function Header({ onMenuClick, title }: HeaderProps) {
       .eq("user_id", profile.id)
       .eq("is_read", false);
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    queryClient.invalidateQueries({ queryKey: ["notifications"] });
   }
 
   const displayName = employee?.full_name || profile?.full_name || "U";
