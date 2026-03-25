@@ -130,6 +130,12 @@ export default function EmployeesPage() {
 
   function onSubmit(values: EmployeeFormValues) {
     if (editingEmployee) {
+      // Chỉ admin (salary cũ = 0) mới được giữ salary = 0
+      const isEditingAdmin = editingEmployee.base_salary === 0;
+      if (!isEditingAdmin && (!values.base_salary || values.base_salary <= 0)) {
+        toast.error("Lương cơ bản phải lớn hơn 0");
+        return;
+      }
       updateMutation.mutate(
         { id: editingEmployee.id, ...values },
         {
