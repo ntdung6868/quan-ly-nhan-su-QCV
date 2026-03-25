@@ -139,7 +139,19 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
         if (!currentAttendance) return;
         const checkInTime = new Date(currentAttendance.check_in!);
         const checkOutTime = new Date(now);
-        const workHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+        let workHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+
+        // Trừ 1 tiếng nghỉ trưa (12:00-13:00) nếu ca bao trùm
+        const noon = new Date(checkInTime);
+        noon.setHours(12, 0, 0, 0);
+        const onepm = new Date(checkInTime);
+        onepm.setHours(13, 0, 0, 0);
+        if (checkInTime < onepm && checkOutTime > noon) {
+          const breakStart = Math.max(checkInTime.getTime(), noon.getTime());
+          const breakEnd = Math.min(checkOutTime.getTime(), onepm.getTime());
+          workHours -= (breakEnd - breakStart) / (1000 * 60 * 60);
+        }
+
         const overtime = Math.max(0, workHours - 8);
 
         const { data, error } = await supabase
