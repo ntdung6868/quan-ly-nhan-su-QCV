@@ -133,7 +133,7 @@ export default function EmployeesPage() {
       // Chỉ admin (salary cũ = 0) mới được giữ salary = 0
       const isEditingAdmin = editingEmployee.base_salary === 0;
       if (!isEditingAdmin && (!values.base_salary || values.base_salary <= 0)) {
-        toast.error("Lương cơ bản phải lớn hơn 0");
+        form.setError("base_salary", { message: "Lương cơ bản phải lớn hơn 0" });
         return;
       }
       updateMutation.mutate(
@@ -149,7 +149,7 @@ export default function EmployeesPage() {
       );
     } else {
       if (!values.base_salary || values.base_salary <= 0) {
-        toast.error("Lương cơ bản là bắt buộc khi tạo nhân viên mới");
+        form.setError("base_salary", { message: "Lương cơ bản là bắt buộc" });
         return;
       }
       createMutation.mutate(values, {

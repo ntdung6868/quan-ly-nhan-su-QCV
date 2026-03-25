@@ -87,7 +87,7 @@ export default function LeavesPage() {
   function onSubmit(values: LeaveFormValues) {
     const days = calcDays(values.start_date, values.end_date);
     if (days <= 0) {
-      toast.error("Ngày nghỉ không hợp lệ");
+      form.setError("end_date", { message: "Ngày kết thúc phải sau ngày bắt đầu" });
       return;
     }
 
@@ -99,7 +99,7 @@ export default function LeavesPage() {
       const alloc = allocations.find((a) => a.leave_type_id === values.leave_type_id);
       const remaining = alloc?.remaining_days ?? 0;
       if (remaining < days) {
-        toast.error(`Không đủ ngày phép năm. Còn lại: ${remaining} ngày, yêu cầu: ${days} ngày`);
+        form.setError("end_date", { message: `Không đủ ngày phép. Còn lại: ${remaining}, yêu cầu: ${days}` });
         return;
       }
     }
@@ -112,7 +112,7 @@ export default function LeavesPage() {
         values.start_date <= l.end_date && values.end_date >= l.start_date
     );
     if (overlap) {
-      toast.error(`Trùng ngày với đơn nghỉ ${formatDate(overlap.start_date)} - ${formatDate(overlap.end_date)}`);
+      form.setError("start_date", { message: `Trùng ngày với đơn ${formatDate(overlap.start_date)} - ${formatDate(overlap.end_date)}` });
       return;
     }
 
