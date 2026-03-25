@@ -101,8 +101,10 @@ export default function DepartmentsPage() {
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   const employeeOptions = useMemo(
-    () => employees.map((e) => ({ value: e.id, label: e.full_name })),
-    [employees]
+    () => employees
+      .filter((e) => !editingDept || e.department_id === editingDept.id)
+      .map((e) => ({ value: e.id, label: e.full_name })),
+    [employees, editingDept]
   );
 
   // Loading skeleton
