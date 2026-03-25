@@ -58,11 +58,30 @@ export async function POST(request: Request) {
       .single();
 
     if (empError) {
-      // Rollback: xoá auth user nếu tạo employee fail
       await admin.auth.admin.deleteUser(authData.user.id);
       return NextResponse.json(
         { error: `Tạo nhân viên thất bại: ${empError.message}` },
         { status: 400 }
+      );
+    }
+
+    // 3. Tạo leave allocations cho NV mới (nghỉ phép năm 12 ngày)
+    const currentYear = new Date().getFullYear();
+    const { data: annualType } = await admin
+      .from("leave_types")
+      .select("id, days_per_year")
+      .eq("is_paid", true)
+      .limit(10);
+
+    if (annualType && annualType.length > 0) {
+      await admin.from("leave_allocations").insert(
+        annualType.map((lt: { id: string; days_per_year: number }) => ({
+          employee_id: emp.id,
+          leave_type_id: lt.id,
+          year: currentYear,
+          total_days: lt.days_per_year,
+          used_days: 0,
+        }))
       );
     }
 
