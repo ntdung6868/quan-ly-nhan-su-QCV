@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { useAuth } from "@/hooks/use-auth";
 import { useEmployee } from "@/hooks/use-employees";
 import { createClient } from "@/lib/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
+import { AvatarCropModal } from "@/components/ui/avatar-crop-modal";
 import { formatDate, formatCurrency, getInitials } from "@/lib/utils";
 import {
-  User, Mail, Phone, MapPin, Calendar, Building2, Lock,
+  User, Mail, Phone, MapPin, Calendar, Building2, Lock, Camera,
   CreditCard, Shield,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -23,13 +25,60 @@ interface PasswordFormValues {
 export default function ProfilePage() {
   const { profile, employee, isAdmin } = useAuth();
   const supabase = createClient();
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Load employee with department join
   const { data: employeeDetail } = useEmployee(employee?.id ?? "");
 
   const deptName = (employeeDetail?.department as { name: string } | undefined)?.name;
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setCropSrc(reader.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
+
+  async function handleAvatarCrop(blob: Blob) {
+    if (!employee) return;
+    setIsUploading(true);
+    try {
+      const fileName = `avatars/${employee.id}.jpg`;
+      // Upload to Supabase Storage
+      const { error: uploadErr } = await supabase.storage
+        .from("avatars")
+        .upload(fileName, blob, { contentType: "image/jpeg", upsert: true });
+      if (uploadErr) throw uploadErr;
+
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(fileName);
+      const avatarUrl = urlData.publicUrl + "?t=" + Date.now(); // cache bust
+
+      // Update employee record
+      const { error: updateErr } = await supabase
+        .from("employees")
+        .update({ avatar_url: avatarUrl })
+        .eq("id", employee.id);
+      if (updateErr) throw updateErr;
+
+      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      setCropSrc(null);
+      // Force reload to update avatar everywhere
+      window.location.reload();
+    } catch (err) {
+      const { toast } = await import("sonner");
+      toast.error((err as Error).message || "Upload thất bại");
+    } finally {
+      setIsUploading(false);
+    }
+  }
 
   const {
     register,
@@ -65,7 +114,10 @@ export default function ProfilePage() {
       {/* Hàng 1: Avatar + tên */}
       <div className="bg-card rounded-xl ring-1 ring-border p-6">
         <div className="flex items-start gap-5">
-          <div className="w-20 h-20 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-2xl shrink-0">
+          <div
+            className="relative w-20 h-20 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-2xl shrink-0 cursor-pointer group"
+            onClick={() => fileInputRef.current?.click()}
+          >
             {employee?.avatar_url ? (
               <img
                 src={employee.avatar_url}
@@ -75,6 +127,16 @@ export default function ProfilePage() {
             ) : (
               getInitials(employee?.full_name || profile?.full_name || "U")
             )}
+            <div className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+              <Camera size={20} className="text-white" />
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
           </div>
           <div className="flex-1">
             <h2 className="text-xl font-bold text-foreground">
@@ -235,6 +297,17 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Crop modal */}
+      {cropSrc && (
+        <AvatarCropModal
+          open={!!cropSrc}
+          imageSrc={cropSrc}
+          onClose={() => setCropSrc(null)}
+          onCrop={handleAvatarCrop}
+          loading={isUploading}
+        />
       )}
     </div>
   );
