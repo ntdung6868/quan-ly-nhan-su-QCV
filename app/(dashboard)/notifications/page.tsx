@@ -50,7 +50,6 @@ export default function NotificationsPage() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${profile.id}` },
         (payload: { new: unknown }) => {
           queryClient.invalidateQueries({ queryKey: ["notifications", profile.id] });
-          toast.info((payload.new as Notification).title);
         }
       ).subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -78,7 +77,7 @@ export default function NotificationsPage() {
   function handleMarkAllRead() {
     if (!profile?.id) return;
     markAllRead.mutate(profile.id, {
-      onSuccess: () => toast.success("Đã đánh dấu tất cả đã đọc"),
+      onSuccess: () => {},
       onError: (err) => toast.error(err.message || "Lỗi"),
     });
   }
