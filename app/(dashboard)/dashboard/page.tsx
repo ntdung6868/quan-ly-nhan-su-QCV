@@ -102,7 +102,7 @@ export default function DashboardPage() {
             <h2 className="text-xl font-bold mt-0.5">
               {employee?.full_name || profile?.full_name || "Người dùng"}
             </h2>
-            <p className="text-blue-100 text-sm mt-1">{formatDate(new Date())}</p>
+            <ClientDate />
           </div>
           {!isAdmin && (
             <div className="text-right">
@@ -352,4 +352,12 @@ export default function DashboardPage() {
       )}
     </div>
   );
+}
+
+function ClientDate() {
+  const [date, setDate] = useState("");
+  useEffect(() => {
+    setDate(formatDate(new Date()));
+  }, []);
+  return <p className="text-blue-100 text-sm mt-1">{date}</p>;
 }
