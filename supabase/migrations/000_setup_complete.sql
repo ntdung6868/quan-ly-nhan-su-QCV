@@ -430,10 +430,10 @@ begin
   for v_admin in
     select p.id as user_id from profiles p where p.role = 'admin'
   loop
-    insert into notifications (user_id, title, message, type)
+    insert into notifications (user_id, title, message, type, link)
     values (v_admin.user_id, 'Đơn nghỉ phép mới',
       v_emp_name || ' gửi đơn nghỉ ' || new.days || ' ngày (' || to_char(new.start_date, 'DD/MM') || ' - ' || to_char(new.end_date, 'DD/MM') || ')',
-      'info');
+      'info', '/leaves');
   end loop;
   return new;
 end;
@@ -466,11 +466,11 @@ begin
     v_type := 'error';
   end if;
 
-  insert into notifications (user_id, title, message, type)
+  insert into notifications (user_id, title, message, type, link)
   values (v_user_id, v_title,
     'Đơn nghỉ ' || to_char(new.start_date, 'DD/MM') || ' - ' || to_char(new.end_date, 'DD/MM') || ' (' || new.days || ' ngày) đã được ' ||
     case when new.status = 'approved' then 'duyệt' else 'từ chối' end,
-    v_type);
+    v_type, '/leaves');
   return new;
 end;
 $$ language plpgsql security definer set search_path = public;
@@ -493,18 +493,18 @@ begin
   select user_id into v_user_id from employees where id = new.assigned_to;
   if v_user_id is null then return new; end if;
 
-  insert into notifications (user_id, title, message, type)
+  insert into notifications (user_id, title, message, type, link)
   values (v_user_id, 'Công việc mới',
     'Bạn được giao: "' || new.title || '"' ||
     case when new.due_date is not null then ' (hạn ' || to_char(new.due_date, 'DD/MM/YYYY') || ')' else '' end,
-    'info');
+    'info', '/tasks');
   return new;
 end;
 $$ language plpgsql security definer set search_path = public;
 
 drop trigger if exists trg_notify_task_assigned on tasks;
 create trigger trg_notify_task_assigned
-  after insert or update on tasks
+  after insert on tasks
   for each row execute function notify_task_assigned();
 
 -- 4. Thông báo nội bộ mới → thông báo tất cả NV
@@ -518,8 +518,8 @@ begin
     join employees e on e.user_id = p.id
     where e.status = 'active'
   loop
-    insert into notifications (user_id, title, message, type)
-    values (v_user.user_id, 'Thông báo nội bộ mới', new.title, 'info');
+    insert into notifications (user_id, title, message, type, link)
+    values (v_user.user_id, 'Thông báo nội bộ mới', new.title, 'info', '/notifications');
   end loop;
   return new;
 end;

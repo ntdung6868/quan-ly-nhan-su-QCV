@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useTheme } from "next-themes";
+import { useRouter } from "next/navigation";
 import { Menu, Bell, Sun, Moon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,9 +14,19 @@ interface HeaderProps {
   title?: string;
 }
 
+// Map tiêu đề thông báo → route
+function getNotifRoute(title: string): string {
+  if (title.includes("nghỉ phép")) return "/leaves";
+  if (title.includes("Công việc") || title.includes("task")) return "/tasks";
+  if (title.includes("Thông báo nội bộ")) return "/notifications";
+  if (title.includes("lương") || title.includes("Lương")) return "/salary";
+  return "/notifications";
+}
+
 export function Header({ onMenuClick, title }: HeaderProps) {
   const { profile, employee } = useAuth();
   const { theme, setTheme } = useTheme();
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -84,6 +95,17 @@ export function Header({ onMenuClick, title }: HeaderProps) {
     };
   }, [showNotifs]);
 
+  async function handleNotifClick(notif: Notification) {
+    // Đánh dấu đã đọc
+    if (!notif.is_read) {
+      await supabase.from("notifications").update({ is_read: true }).eq("id", notif.id);
+      setNotifications((prev) => prev.map((n) => n.id === notif.id ? { ...n, is_read: true } : n));
+    }
+    // Navigate
+    setShowNotifs(false);
+    router.push(notif.link || getNotifRoute(notif.title));
+  }
+
   async function markAllRead() {
     if (!profile?.id) return;
     await supabase
@@ -151,8 +173,9 @@ export function Header({ onMenuClick, title }: HeaderProps) {
                   notifications.map((notif) => (
                     <div
                       key={notif.id}
+                      onClick={() => handleNotifClick(notif)}
                       className={cn(
-                        "px-4 py-3 border-b border-border/50 hover:bg-accent/50 transition",
+                        "px-4 py-3 border-b border-border/50 hover:bg-accent/50 transition cursor-pointer",
                         !notif.is_read && "bg-primary/5"
                       )}
                     >
