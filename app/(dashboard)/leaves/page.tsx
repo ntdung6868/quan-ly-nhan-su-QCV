@@ -372,7 +372,7 @@ export default function LeavesPage() {
             emptyState={{
               icon: CalendarOff,
               title: "Chưa có đơn nghỉ phép",
-              action: (
+              action: isAdmin ? undefined : (
                 <Button
                   onClick={() => setModalOpen(true)}
                   leftIcon={<Plus size={14} />}

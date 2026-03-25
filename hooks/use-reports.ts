@@ -69,10 +69,10 @@ export function useReportData(year: number) {
             .gte("start_date", `${year}-01-01`)
             .lte("end_date", `${year}-12-31`),
           supabase.from("departments").select("id, name"),
-          // CRITICAL: Fetch ALL attendance for the year in ONE query
+          // Attendance cho NV thật (bỏ admin)
           supabase
             .from("attendance")
-            .select("date, status")
+            .select("date, status, employee_id")
             .gte("date", `${year}-01-01`)
             .lte("date", `${year}-12-31`),
         ]);
@@ -84,10 +84,14 @@ export function useReportData(year: number) {
       if (attRes.error) throw attRes.error;
 
       const employees = empRes.data || [];
+      const empIds = new Set(employees.map((e: { id: string }) => e.id));
       const payslips = payslipRes.data || [];
       const leaves = leaveRes.data || [];
       const departments = deptRes.data || [];
-      const allAttendance = attRes.data || [];
+      // Filter attendance chỉ cho NV thật (bỏ admin)
+      const allAttendance = (attRes.data || []).filter(
+        (a: { employee_id?: string }) => a.employee_id && empIds.has(a.employee_id)
+      );
 
       // --- Summary ---
       const totalEmployees = employees.length;

@@ -86,18 +86,24 @@ export function useDashboard(
       let weeklyData: WeeklyAttendanceEntry[] = [];
 
       if (isAdmin || isManager) {
-        const [empRes, presentRes, pendingLeaveRes, taskStatsRes] =
+        // Lấy danh sách NV thật (bỏ admin)
+        const { data: realEmps } = await supabase
+          .from("employees")
+          .select("id")
+          .eq("status", "active")
+          .gt("base_salary", 0);
+        const realEmpIds = (realEmps || []).map((e: { id: string }) => e.id);
+
+        const [presentRes, pendingLeaveRes, taskStatsRes] =
           await Promise.all([
-            supabase
-              .from("employees")
-              .select("id", { count: "exact" })
-              .eq("status", "active")
-              .gt("base_salary", 0),
-            supabase
-              .from("attendance")
-              .select("id", { count: "exact" })
-              .eq("date", today)
-              .in("status", ["present", "late"]),
+            realEmpIds.length
+              ? supabase
+                  .from("attendance")
+                  .select("id", { count: "exact" })
+                  .eq("date", today)
+                  .in("status", ["present", "late"])
+                  .in("employee_id", realEmpIds)
+              : { count: 0 },
             supabase
               .from("leaves")
               .select("id", { count: "exact" })
@@ -108,7 +114,7 @@ export function useDashboard(
               .eq("status", "in_progress"),
           ]);
 
-        const totalEmp = empRes.count || 0;
+        const totalEmp = realEmpIds.length;
         const present = presentRes.count || 0;
         stats = {
           totalEmployees: totalEmp,
@@ -127,10 +133,12 @@ export function useDashboard(
           days.push(d.toISOString().split("T")[0]);
         }
 
-        const weekRes = await supabase
+        let weekQuery = supabase
           .from("attendance")
           .select("date, status")
           .in("date", days);
+        if (realEmpIds.length) weekQuery = weekQuery.in("employee_id", realEmpIds);
+        const weekRes = await weekQuery;
 
         weeklyData = days.map((date) => {
           const dayAttendances = (weekRes.data || []).filter(
