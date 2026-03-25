@@ -36,7 +36,7 @@ const statusMap = {
 };
 
 export default function LeavesPage() {
-  const { employee, isManager } = useAuth();
+  const { employee, isAdmin, isManager } = useAuth();
   const [filterStatus, setFilterStatus] = useState("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<LeaveWithRels | null>(null);
@@ -293,7 +293,7 @@ export default function LeavesPage() {
   return (
     <div className="space-y-5">
       {/* Allocation summary */}
-      {allocations.length > 0 && (
+      {!isAdmin && allocations.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {allocations.map((alloc) => (
             <div
@@ -349,16 +349,18 @@ export default function LeavesPage() {
               </span>
             </TabsTrigger>
           </TabsList>
-          <Button
-            onClick={() => {
-              form.reset();
-              setModalOpen(true);
-            }}
-            leftIcon={<Plus size={14} />}
-            size="sm"
-          >
-            Tạo đơn nghỉ
-          </Button>
+          {!isAdmin && (
+            <Button
+              onClick={() => {
+                form.reset();
+                setModalOpen(true);
+              }}
+              leftIcon={<Plus size={14} />}
+              size="sm"
+            >
+              Tạo đơn nghỉ
+            </Button>
+          )}
         </div>
 
         {/* Table */}
