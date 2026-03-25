@@ -111,7 +111,7 @@ export default function NotificationsPage() {
         <button
           onClick={handleMarkAllRead}
           disabled={unreadCount === 0}
-          className={`text-xs ${unreadCount > 0 ? "text-primary hover:underline" : "text-muted-foreground/50 cursor-not-allowed"}`}
+          className={`text-xs ${unreadCount > 0 ? "text-primary hover:underline cursor-pointer" : "text-muted-foreground/50 cursor-not-allowed"}`}
         >
           Đánh dấu đã đọc
         </button>
