@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import {
   useNotifications,
@@ -31,6 +32,7 @@ import type { Notification } from "@/types/database";
 export default function NotificationsPage() {
   const { profile, employee, isAdmin } = useAuth();
   const supabase = createClient();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("notifications");
   const [announcModalOpen, setAnnouncModalOpen] = useState(false);
@@ -87,6 +89,23 @@ export default function NotificationsPage() {
   );
 
   const [deleteNotifTarget, setDeleteNotifTarget] = useState<string | null>(null);
+
+  function getNotifRoute(title: string, link?: string | null): string {
+    if (link) return link;
+    if (title.includes("nghỉ phép")) return "/leaves";
+    if (title.includes("Công việc") || title.includes("task")) return "/tasks";
+    if (title.includes("lương") || title.includes("Lương")) return "/salary";
+    return "/notifications";
+  }
+
+  async function handleNotifClick(notif: Notification) {
+    if (!notif.is_read) {
+      await supabase.from("notifications").update({ is_read: true }).eq("id", notif.id);
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    }
+    const route = getNotifRoute(notif.title, notif.link);
+    if (route !== "/notifications") router.push(route);
+  }
 
   function handleMarkAllRead() {
     if (!profile?.id) return;
@@ -183,8 +202,9 @@ export default function NotificationsPage() {
                 {notifications.map((notif) => (
                   <div
                     key={notif.id}
+                    onClick={() => handleNotifClick(notif)}
                     className={cn(
-                      "flex items-start gap-3 px-4 py-3 hover:bg-accent transition",
+                      "flex items-start gap-3 px-4 py-3 hover:bg-accent transition cursor-pointer",
                       !notif.is_read && "bg-primary/5"
                     )}
                   >
@@ -217,7 +237,7 @@ export default function NotificationsPage() {
                       </p>
                     </div>
                     <button
-                      onClick={() => setDeleteNotifTarget(notif.id)}
+                      onClick={(e) => { e.stopPropagation(); setDeleteNotifTarget(notif.id); }}
                       className="text-muted-foreground/50 hover:text-destructive transition shrink-0"
                     >
                       <Trash2 size={14} />
