@@ -105,16 +105,16 @@ export default function NotificationsPage() {
     <div className="space-y-5">
       {/* Toolbar */}
       <div className="bg-card rounded-xl ring-1 ring-border p-3 flex flex-wrap items-center gap-2">
-        {unreadCount > 0 && (
-          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-destructive/10 text-destructive">
-            {unreadCount} chưa đọc
-          </span>
-        )}
-        {unreadCount > 0 && (
-          <button onClick={handleMarkAllRead} className="text-xs text-primary hover:underline">
-            Đánh dấu đã đọc
-          </button>
-        )}
+        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${unreadCount > 0 ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"}`}>
+          {unreadCount} chưa đọc
+        </span>
+        <button
+          onClick={handleMarkAllRead}
+          disabled={unreadCount === 0}
+          className={`text-xs ${unreadCount > 0 ? "text-primary hover:underline" : "text-muted-foreground/50 cursor-not-allowed"}`}
+        >
+          Đánh dấu đã đọc
+        </button>
         <div className="flex-1" />
         {isAdmin && (
           <Button onClick={() => { form.reset(); setAnnouncModalOpen(true); }} leftIcon={<Plus size={14} />} size="sm">
