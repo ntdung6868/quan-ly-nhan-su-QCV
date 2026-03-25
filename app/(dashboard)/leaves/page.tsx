@@ -66,6 +66,7 @@ export default function LeavesPage() {
 
   const form = useForm<LeaveFormValues>({
     resolver: zodResolver(leaveSchema),
+    mode: "onChange",
     defaultValues: {
       leave_type_id: "",
       start_date: "",

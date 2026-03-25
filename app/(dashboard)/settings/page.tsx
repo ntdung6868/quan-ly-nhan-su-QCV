@@ -30,6 +30,7 @@ export default function SettingsPage() {
 
   const companyForm = useForm<CompanyConfigFormValues>({
     resolver: zodResolver(companyConfigSchema),
+    mode: "onChange",
     defaultValues: {
       company_name: "",
       address: "",
@@ -48,6 +49,7 @@ export default function SettingsPage() {
 
   const salaryForm = useForm<SalaryConfigFormValues>({
     resolver: zodResolver(salaryConfigSchema),
+    mode: "onChange",
     defaultValues: {
       personal_income_tax_rate: 10,
       social_insurance_rate: 8,

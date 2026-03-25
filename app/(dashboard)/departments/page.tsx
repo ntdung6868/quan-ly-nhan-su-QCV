@@ -36,6 +36,7 @@ export default function DepartmentsPage() {
 
   const form = useForm<DepartmentFormValues>({
     resolver: zodResolver(departmentSchema),
+    mode: "onChange",
     defaultValues: {
       name: "",
       code: "",

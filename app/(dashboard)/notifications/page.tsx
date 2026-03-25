@@ -48,6 +48,7 @@ export default function NotificationsPage() {
 
   const form = useForm<AnnouncementFormValues>({
     resolver: zodResolver(announcementSchema),
+    mode: "onChange",
     defaultValues: {
       title: "",
       content: "",

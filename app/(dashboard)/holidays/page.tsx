@@ -30,6 +30,7 @@ export default function HolidaysPage() {
 
   const form = useForm<HolidayFormValues>({
     resolver: zodResolver(holidaySchema),
+    mode: "onChange",
     defaultValues: {
       name: "",
       date: "",

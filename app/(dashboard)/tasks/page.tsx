@@ -88,6 +88,7 @@ export default function TasksPage() {
 
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
+    mode: "onChange",
     defaultValues: {
       title: "",
       description: "",

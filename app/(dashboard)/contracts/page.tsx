@@ -63,6 +63,7 @@ export default function ContractsPage() {
 
   const form = useForm<ContractFormValues>({
     resolver: zodResolver(contractSchema),
+    mode: "onChange",
     defaultValues: {
       employee_id: "",
       type: "full_time",

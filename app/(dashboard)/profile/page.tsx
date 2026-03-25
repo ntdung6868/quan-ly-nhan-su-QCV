@@ -87,6 +87,7 @@ export default function ProfilePage() {
     reset,
     formState: { errors },
   } = useForm<PasswordFormValues>({
+    mode: "onChange",
     defaultValues: { newPass: "", confirm: "" },
   });
 

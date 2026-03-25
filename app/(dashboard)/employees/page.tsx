@@ -62,6 +62,7 @@ export default function EmployeesPage() {
 
   const form = useForm<EmployeeFormValues>({
     resolver: zodResolver(employeeSchema),
+    mode: "onChange",
     defaultValues: {
       full_name: "",
       phone: "",
