@@ -372,7 +372,10 @@ export default function EmployeesPage() {
             <FormField label="Ngày vào làm" required error={form.formState.errors.hire_date?.message}>
               <input type="date" {...form.register("hire_date")} className="input" />
             </FormField>
-            <FormField label="Lương cơ bản (VNĐ)" error={form.formState.errors.base_salary?.message}>
+            <FormField label="Lương cơ bản (VNĐ)" required error={
+              form.formState.errors.base_salary?.message ||
+              (form.watch("base_salary") === 0 && !(editingEmployee?.base_salary === 0) ? "Lương cơ bản là bắt buộc" : undefined)
+            }>
               <CurrencyInput
                 value={form.watch("base_salary") || 0}
                 onChange={(v) => form.setValue("base_salary", v, { shouldValidate: true })}

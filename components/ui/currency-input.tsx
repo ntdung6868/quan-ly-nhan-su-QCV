@@ -10,11 +10,12 @@ interface CurrencyInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>,
 
 export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
   ({ value, onChange, className, ...props }, ref) => {
-    const displayValue = value ? new Intl.NumberFormat("vi-VN").format(value) : "";
+    const displayValue = value > 0 ? new Intl.NumberFormat("vi-VN").format(value) : "";
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
       const raw = e.target.value.replace(/\D/g, "");
-      onChange(raw ? parseInt(raw, 10) : 0);
+      const num = raw ? parseInt(raw, 10) : 0;
+      onChange(num);
     }
 
     return (
