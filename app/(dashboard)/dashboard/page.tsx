@@ -202,7 +202,7 @@ export default function DashboardPage() {
         {/* Announcements */}
         <div className="bg-card rounded-xl ring-1 ring-border p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-foreground">Thông báo nội bộ</h3>
+            <h3 className="font-semibold text-foreground">Thông báo</h3>
             <Link
               href="/notifications"
               className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
