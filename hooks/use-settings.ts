@@ -13,8 +13,8 @@ export function useCompanyConfig() {
       const { data, error } = await supabase
         .from("company_config")
         .select("*")
-        .single();
-      if (error && error.code !== "PGRST116") throw error;
+        .maybeSingle();
+      if (error) throw error;
       return data as CompanyConfig | null;
     },
   });
@@ -29,8 +29,8 @@ export function useSalaryConfigSettings() {
       const { data, error } = await supabase
         .from("salary_config")
         .select("*")
-        .single();
-      if (error && error.code !== "PGRST116") throw error;
+        .maybeSingle();
+      if (error) throw error;
       return data as SalaryConfig | null;
     },
   });

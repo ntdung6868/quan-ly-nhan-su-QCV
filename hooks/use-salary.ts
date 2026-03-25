@@ -46,9 +46,9 @@ export function useSalaryConfig() {
       const { data, error } = await supabase
         .from("salary_config")
         .select("*")
-        .single();
+        .maybeSingle();
       if (error) throw error;
-      return data as SalaryConfig;
+      return data as SalaryConfig | null;
     },
   });
 }
