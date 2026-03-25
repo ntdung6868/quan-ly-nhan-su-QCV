@@ -32,6 +32,7 @@ export default function ReportsPage() {
   const summary = data?.summary ?? {
     totalEmployees: 0,
     totalPayroll: 0,
+    monthsWithPayroll: 0,
     avgAttendanceRate: 0,
     totalLeaves: 0,
   };
@@ -77,8 +78,8 @@ export default function ReportsPage() {
         <StatCard
           title="Lương bình quân"
           value={
-            summary.totalEmployees > 0
-              ? formatCurrency(summary.totalPayroll / 12 / summary.totalEmployees)
+            summary.totalEmployees > 0 && summary.monthsWithPayroll > 0
+              ? formatCurrency(summary.totalPayroll / summary.monthsWithPayroll / summary.totalEmployees)
               : "\u2014"
           }
           subtitle="Tháng/người"

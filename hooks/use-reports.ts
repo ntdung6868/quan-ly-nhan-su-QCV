@@ -90,6 +90,7 @@ export function useReportData(year: number) {
       // --- Summary ---
       const totalEmployees = employees.length;
       const totalPayroll = payslips.reduce((s: number, p: { net_salary: number }) => s + p.net_salary, 0);
+      const monthsWithPayroll = new Set(payslips.map((p: { month: number }) => p.month)).size;
       const totalLeaves = leaves.filter(
         (l: { status: string }) => l.status === "approved"
       ).length;
@@ -188,6 +189,7 @@ export function useReportData(year: number) {
         summary: {
           totalEmployees,
           totalPayroll,
+          monthsWithPayroll,
           avgAttendanceRate,
           totalLeaves,
         },
