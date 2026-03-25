@@ -88,16 +88,17 @@ export function useEmployee(id: string) {
         .from("employees")
         .select("*")
         .eq("id", id)
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!emp) throw new Error("Không tìm thấy nhân viên");
 
       // Load relations separately to avoid ambiguous FK
       const [deptRes, mgrRes] = await Promise.all([
         emp.department_id
-          ? supabase.from("departments").select("*").eq("id", emp.department_id).single()
+          ? supabase.from("departments").select("*").eq("id", emp.department_id).maybeSingle()
           : { data: null },
         emp.manager_id
-          ? supabase.from("employees").select("id,full_name").eq("id", emp.manager_id).single()
+          ? supabase.from("employees").select("id,full_name").eq("id", emp.manager_id).maybeSingle()
           : { data: null },
       ]);
 
