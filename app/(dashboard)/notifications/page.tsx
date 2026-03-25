@@ -104,58 +104,82 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          {unreadCount > 0 && (
-            <Button onClick={handleMarkAllRead} variant="ghost" size="sm" leftIcon={<Check size={14} />} loading={markAllRead.isPending}>
-              Đánh dấu đã đọc ({unreadCount})
-            </Button>
+      {/* Card chính */}
+      <div className="ring-1 ring-border rounded-xl overflow-hidden">
+        {/* Header */}
+        <div className="bg-card px-4 py-3 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h3 className="font-semibold text-foreground">Thông báo</h3>
+            {unreadCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-destructive/10 text-destructive">
+                {unreadCount} chưa đọc
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <button onClick={handleMarkAllRead} className="text-xs text-primary hover:underline">
+                Đánh dấu đã đọc
+              </button>
+            )}
+            {isAdmin && (
+              <Button onClick={() => { form.reset(); setAnnouncModalOpen(true); }} leftIcon={<Plus size={14} />} size="sm">
+                Đăng thông báo
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* List */}
+        <div className="bg-card">
+          {isLoading ? (
+            <div className="p-8 text-center text-muted-foreground text-sm">Đang tải...</div>
+          ) : notifications.length === 0 ? (
+            <div className="p-12 text-center">
+              <Bell size={32} className="mx-auto text-muted-foreground/30 mb-3" />
+              <p className="text-sm text-muted-foreground">Chưa có thông báo nào</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {notifications.map((notif) => (
+                <div
+                  key={notif.id}
+                  onClick={() => handleNotifClick(notif)}
+                  className={cn(
+                    "flex items-start gap-3 px-4 py-3.5 hover:bg-accent/50 transition cursor-pointer group",
+                    !notif.is_read && "bg-primary/5"
+                  )}
+                >
+                  {/* Dot */}
+                  <div className={cn(
+                    "w-2 h-2 rounded-full mt-2 shrink-0",
+                    !notif.is_read ? "bg-primary" : "bg-transparent"
+                  )} />
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <p className={cn(
+                      "text-sm text-foreground",
+                      !notif.is_read ? "font-semibold" : "font-medium"
+                    )}>
+                      {notif.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{notif.message}</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">{formatDateTime(notif.created_at)}</p>
+                  </div>
+
+                  {/* Delete */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDeleteNotifTarget(notif.id); }}
+                    className="opacity-0 group-hover:opacity-100 text-muted-foreground/50 hover:text-destructive transition shrink-0 p-1"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
-        {isAdmin && (
-          <Button onClick={() => { form.reset(); setAnnouncModalOpen(true); }} leftIcon={<Plus size={14} />} size="sm">
-            Đăng thông báo nội bộ
-          </Button>
-        )}
-      </div>
-
-      {/* Notifications list */}
-      <div className="bg-card rounded-xl ring-1 ring-border overflow-hidden">
-        {isLoading ? (
-          <div className="p-8 text-center text-muted-foreground">Đang tải...</div>
-        ) : notifications.length === 0 ? (
-          <EmptyState icon={Bell} title="Chưa có thông báo nào" />
-        ) : (
-          <div className="divide-y divide-border/50">
-            {notifications.map((notif) => (
-              <div
-                key={notif.id}
-                onClick={() => handleNotifClick(notif)}
-                className={cn(
-                  "flex items-start gap-3 px-4 py-3 hover:bg-accent transition cursor-pointer",
-                  !notif.is_read && "bg-primary/5"
-                )}
-              >
-                <div className={cn(
-                  "w-2 h-2 rounded-full mt-2 shrink-0",
-                  !notif.is_read ? "bg-primary" : "bg-muted-foreground/30"
-                )} />
-                <div className="flex-1 min-w-0">
-                  <p className={cn("text-sm text-foreground", !notif.is_read && "font-semibold")}>{notif.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{notif.message}</p>
-                  <p className="text-xs text-muted-foreground/70 mt-1">{formatDateTime(notif.created_at)}</p>
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setDeleteNotifTarget(notif.id); }}
-                  className="text-muted-foreground/50 hover:text-destructive transition shrink-0"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Create announcement modal */}
