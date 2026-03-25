@@ -130,23 +130,23 @@ export default function NotificationsPage() {
   return (
     <div className="space-y-5">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="notifications" className="flex items-center gap-2">
-            <Bell size={15} />
-            Thông báo cá nhân
-            {unreadCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-destructive/10 text-destructive">
-                {unreadCount}
-              </span>
-            )}
-          </TabsTrigger>
-          {isAdmin && (
+        {isAdmin && (
+          <TabsList>
+            <TabsTrigger value="notifications" className="flex items-center gap-2">
+              <Bell size={15} />
+              Thông báo cá nhân
+              {unreadCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-destructive/10 text-destructive">
+                  {unreadCount}
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="announcements" className="flex items-center gap-2">
               <Megaphone size={15} />
               Thông báo nội bộ
             </TabsTrigger>
-          )}
-        </TabsList>
+          </TabsList>
+        )}
 
         {/* Tab: Thông báo cá nhân */}
         <TabsContent value="notifications">
