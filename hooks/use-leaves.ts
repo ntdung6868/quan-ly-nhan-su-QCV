@@ -109,6 +109,7 @@ export function useCreateLeave() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leaves"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["leaveAllocations"] });
     },
   });
@@ -141,6 +142,7 @@ export function useApproveLeave() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leaves"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["leaveAllocations"] });
     },
   });
@@ -175,6 +177,7 @@ export function useRejectLeave() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leaves"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 }
@@ -196,6 +199,7 @@ export function useCancelLeave() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leaves"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["leaveAllocations"] });
     },
   });

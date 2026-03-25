@@ -274,6 +274,7 @@ export default function AttendancePage() {
           onSuccess={() => {
             setCheckInOpen(false);
             queryClient.invalidateQueries({ queryKey: ["attendance"] });
+            queryClient.invalidateQueries({ queryKey: ["dashboard"] });
           }}
         />
       )}

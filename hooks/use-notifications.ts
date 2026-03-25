@@ -90,6 +90,12 @@ export function useDeleteNotification() {
   });
 }
 
+// Invalidate dashboard + related queries
+function invalidateAll(queryClient: ReturnType<typeof useQueryClient>, keys: string[]) {
+  keys.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+  queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+}
+
 export function useCreateAnnouncement() {
   const supabase = createClient();
   const queryClient = useQueryClient();
@@ -107,7 +113,7 @@ export function useCreateAnnouncement() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["announcements"] });
+      invalidateAll(queryClient, ["announcements"]);
     },
   });
 }
@@ -125,7 +131,7 @@ export function useDeleteAnnouncement() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["announcements"] });
+      invalidateAll(queryClient, ["announcements"]);
     },
   });
 }

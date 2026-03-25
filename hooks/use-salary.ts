@@ -80,6 +80,7 @@ export function useUpdatePayslipStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payslips"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 }
