@@ -245,7 +245,7 @@ export default function ContractsPage() {
 
       <Modal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { setModalOpen(false); setEditingContract(null); }}
         title={editingContract ? "Cập nhật hợp đồng" : "Tạo hợp đồng mới"}
         size="md"
       >

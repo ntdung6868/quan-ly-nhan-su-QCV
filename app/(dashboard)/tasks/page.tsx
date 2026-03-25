@@ -330,7 +330,7 @@ export default function TasksPage() {
       {/* Create/Edit Modal */}
       <Modal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { setModalOpen(false); setEditingTask(null); }}
         title={editingTask ? "Cập nhật công việc" : "Tạo công việc mới"}
         size="md"
       >

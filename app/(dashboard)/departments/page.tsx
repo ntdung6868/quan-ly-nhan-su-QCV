@@ -174,7 +174,7 @@ export default function DepartmentsPage() {
       {/* Create/Edit Modal */}
       <Modal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { setModalOpen(false); setEditingDept(null); }}
         title={editingDept ? "Cập nhật phòng ban" : "Thêm phòng ban"}
         size="sm"
       >

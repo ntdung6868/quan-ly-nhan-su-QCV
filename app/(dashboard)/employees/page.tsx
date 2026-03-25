@@ -321,7 +321,7 @@ export default function EmployeesPage() {
       {/* Create/Edit Modal */}
       <Modal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { setModalOpen(false); setEditingEmployee(null); }}
         title={editingEmployee ? "Cập nhật nhân viên" : "Thêm nhân viên mới"}
         size="lg"
       >
