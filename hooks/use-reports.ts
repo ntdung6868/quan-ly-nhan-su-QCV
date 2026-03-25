@@ -30,6 +30,7 @@ interface ReportData {
   summary: {
     totalEmployees: number;
     totalPayroll: number;
+    monthsWithPayroll: number;
     avgAttendanceRate: number;
     totalLeaves: number;
   };
