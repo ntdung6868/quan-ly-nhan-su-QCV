@@ -75,6 +75,6 @@ export function generateCredentials(fullName: string): { email: string; password
 
   return {
     email: `${slug}@qcviet.vn`,
-    password: `${capitalSlug}@2026!`,
+    password: `${capitalSlug}@${new Date().getFullYear()}!`,
   };
 }

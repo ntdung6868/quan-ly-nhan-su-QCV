@@ -414,7 +414,7 @@ export default function EmployeesPage() {
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title={`Xoá "${deleteTarget?.full_name}"?`}
-        description="Hành động này không thể hoàn tác."
+        description="Tất cả dữ liệu liên quan (chấm công, nghỉ phép, hợp đồng, phiếu lương, công việc) sẽ bị xoá. Hành động này không thể hoàn tác."
         variant="danger"
         confirmText="Xoá"
         loading={deleteMutation.isPending}

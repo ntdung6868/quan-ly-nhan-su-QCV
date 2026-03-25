@@ -25,6 +25,7 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
   const [isLoading, setIsLoading] = useState(false);
   const [notes, setNotes] = useState("");
   const [todayLeave, setTodayLeave] = useState<string | null>(null);
+  const [todayHoliday, setTodayHoliday] = useState<string | null>(null);
   const isCheckOut = !!(currentAttendance?.check_in && !currentAttendance?.check_out);
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
       loadConfig();
       getLocation();
       checkTodayLeave();
+      checkTodayHoliday();
     }
   }, [open]);
 
@@ -48,6 +50,16 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
       .limit(1);
     const leave = data?.[0];
     setTodayLeave(leave ? (leave.leave_type as { name: string } | null)?.name || "Nghỉ phép" : null);
+  }
+
+  async function checkTodayHoliday() {
+    const today = new Date().toISOString().split("T")[0];
+    const { data } = await supabase
+      .from("holidays")
+      .select("name")
+      .eq("date", today)
+      .limit(1);
+    setTodayHoliday(data?.[0]?.name ?? null);
   }
 
   async function loadConfig() {
@@ -80,6 +92,10 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
 
   async function handleSubmit() {
     if (!employee) return;
+    if (!isCheckOut && todayHoliday) {
+      toast.error(`Hôm nay là ngày lễ (${todayHoliday}). Không cần chấm công.`);
+      return;
+    }
     if (!isCheckOut && todayLeave) {
       toast.error(`Hôm nay bạn đang nghỉ phép (${todayLeave}). Không thể check-in.`);
       return;
@@ -152,8 +168,16 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
   return (
     <Modal open={open} onClose={onClose} title={isCheckOut ? "Check-out" : "Check-in"} size="sm">
       <div className="space-y-4">
+        {/* Holiday warning */}
+        {!isCheckOut && todayHoliday && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-sm">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>Hôm nay là ngày lễ: <strong>{todayHoliday}</strong>. Không cần chấm công.</span>
+          </div>
+        )}
+
         {/* Leave warning */}
-        {!isCheckOut && todayLeave && (
+        {!isCheckOut && !todayHoliday && todayLeave && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">
             <AlertCircle size={16} className="shrink-0" />
             <span>Hôm nay bạn đang nghỉ <strong>{todayLeave}</strong>. Không thể check-in.</span>
@@ -217,7 +241,7 @@ export function CheckInModal({ open, onClose, currentAttendance, onSuccess }: Ch
           className="w-full"
           loading={isLoading}
           onClick={handleSubmit}
-          disabled={!isCheckOut && !!todayLeave}
+          disabled={!isCheckOut && (!!todayLeave || !!todayHoliday)}
           leftIcon={<CheckCircle2 size={16} />}
         >
           {isCheckOut ? "Xác nhận Check-out" : "Xác nhận Check-in"}
