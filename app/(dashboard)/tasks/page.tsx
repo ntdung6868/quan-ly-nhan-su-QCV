@@ -356,6 +356,7 @@ export default function TasksPage() {
               render={({ field }) => (
                 <FormField label="Ưu tiên" error={form.formState.errors.priority?.message}>
                   <Select
+                    key={`pri-${editingTask?.id ?? "new"}`}
                     value={field.value}
                     onValueChange={(v) => field.onChange(v)}
                     options={priorityOptions}
@@ -370,6 +371,7 @@ export default function TasksPage() {
               render={({ field }) => (
                 <FormField label="Trạng thái" error={form.formState.errors.status?.message}>
                   <Select
+                    key={`st-${editingTask?.id ?? "new"}`}
                     value={field.value}
                     onValueChange={(v) => field.onChange(v)}
                     options={statusOptions}
@@ -384,6 +386,7 @@ export default function TasksPage() {
               render={({ field }) => (
                 <FormField label="Phân công cho">
                   <Select
+                    key={`at-${editingTask?.id ?? "new"}`}
                     value={field.value || ""}
                     onValueChange={(v) => field.onChange(v || null)}
                     placeholder="Chọn nhân viên"

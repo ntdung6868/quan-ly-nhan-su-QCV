@@ -334,6 +334,7 @@ export default function EmployeesPage() {
             </FormField>
             <FormField label="Giới tính" error={form.formState.errors.gender?.message}>
               <Select
+                key={`gender-${editingEmployee?.id ?? "new"}`}
                 value={form.watch("gender") ?? ""}
                 onValueChange={(v) => form.setValue("gender", (v || undefined) as EmployeeFormValues["gender"])}
                 placeholder="Chọn giới tính"
@@ -350,6 +351,7 @@ export default function EmployeesPage() {
             </FormField>
             <FormField label="Phòng ban">
               <Select
+                key={`dept-${editingEmployee?.id ?? "new"}`}
                 value={form.watch("department_id") ?? ""}
                 onValueChange={(v) => form.setValue("department_id", v || null)}
                 placeholder="Chọn phòng ban"
@@ -367,6 +369,7 @@ export default function EmployeesPage() {
             </FormField>
             <FormField label="Trạng thái" error={form.formState.errors.status?.message}>
               <Select
+                key={`status-${editingEmployee?.id ?? "new"}`}
                 value={form.watch("status") ?? "active"}
                 onValueChange={(v) => form.setValue("status", v as EmployeeFormValues["status"])}
                 options={[

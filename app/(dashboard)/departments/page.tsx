@@ -195,6 +195,7 @@ export default function DepartmentsPage() {
             </FormField>
             <FormField label="Trưởng phòng" error={form.formState.errors.manager_id?.message}>
               <Select
+                key={`mgr-${editingDept?.id ?? "new"}`}
                 value={form.watch("manager_id") ?? ""}
                 onValueChange={(v) => form.setValue("manager_id", v || null)}
                 placeholder="Chưa chọn"

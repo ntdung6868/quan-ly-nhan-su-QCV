@@ -258,7 +258,7 @@ export default function ContractsPage() {
                 required
                 error={form.formState.errors.employee_id?.message}
               >
-                <Select
+                <Select key={`c-${editingContract?.id ?? "n"}`}
                   value={field.value}
                   onValueChange={(v) => field.onChange(v)}
                   placeholder="Chọn nhân viên"
@@ -278,7 +278,7 @@ export default function ContractsPage() {
                   required
                   error={form.formState.errors.type?.message}
                 >
-                  <Select
+                  <Select key={`c-${editingContract?.id ?? "n"}`}
                     value={field.value}
                     onValueChange={(v) => field.onChange(v)}
                     options={typeOptions}
@@ -295,7 +295,7 @@ export default function ContractsPage() {
                   label="Trạng thái"
                   error={form.formState.errors.status?.message}
                 >
-                  <Select
+                  <Select key={`c-${editingContract?.id ?? "n"}`}
                     value={field.value}
                     onValueChange={(v) => field.onChange(v)}
                     options={statusOptions}
