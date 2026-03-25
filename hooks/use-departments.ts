@@ -17,7 +17,7 @@ export function useDepartments() {
     queryFn: async () => {
       const [deptRes, empRes] = await Promise.all([
         supabase.from("departments").select("*").order("name"),
-        supabase.from("employees").select("id,full_name,department_id").eq("status", "active").gt("base_salary", 0),
+        supabase.from("employees").select("id,full_name,department_id").eq("status", "active"),
       ]);
 
       if (deptRes.error) throw deptRes.error;
