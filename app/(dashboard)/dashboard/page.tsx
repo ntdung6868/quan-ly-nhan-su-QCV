@@ -203,7 +203,12 @@ export default function DashboardPage() {
         <div className="bg-card rounded-xl ring-1 ring-border p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-foreground">Thông báo nội bộ</h3>
-            <Bell size={16} className="text-muted-foreground/70" />
+            <Link
+              href="/notifications"
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+            >
+              Xem tất cả <ChevronRight size={12} />
+            </Link>
           </div>
           {announcements.length === 0 ? (
             <p className="text-muted-foreground/70 text-sm text-center py-6">
@@ -212,7 +217,7 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-3">
               {announcements.map((a) => (
-                <div key={a.id} className="border-l-2 border-blue-500 pl-3">
+                <Link key={a.id} href="/notifications" className="block border-l-2 border-blue-500 pl-3 hover:bg-accent/50 rounded-r-lg -ml-0.5 transition">
                   {a.is_pinned && (
                     <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
                       Ghim
@@ -225,7 +230,7 @@ export default function DashboardPage() {
                   <p className="text-xs text-muted-foreground/70 mt-1">
                     {formatDate(a.created_at)}
                   </p>
-                </div>
+                </Link>
               ))}
             </div>
           )}
@@ -249,8 +254,9 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {tasks.map((t) => (
-                <div
+                <Link
                   key={t.id}
+                  href="/tasks"
                   className="flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-muted transition-colors"
                 >
                   <div
@@ -278,7 +284,7 @@ export default function DashboardPage() {
                   >
                     {t.status === "todo" ? "Chờ" : "Đang làm"}
                   </Badge>
-                </div>
+                </Link>
               ))}
             </div>
           )}
@@ -302,8 +308,9 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {recentLeaves.map((leave) => (
-                <div
+                <Link
                   key={leave.id}
+                  href="/leaves"
                   className="flex items-center justify-between p-2.5 rounded-lg hover:bg-muted transition-colors"
                 >
                   <div>
@@ -331,7 +338,7 @@ export default function DashboardPage() {
                           ? "Huỷ"
                           : "Chờ duyệt"}
                   </Badge>
-                </div>
+                </Link>
               ))}
             </div>
           )}
