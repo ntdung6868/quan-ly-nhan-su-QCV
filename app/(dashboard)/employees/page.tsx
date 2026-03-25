@@ -367,7 +367,7 @@ export default function EmployeesPage() {
             </FormField>
             <FormField label="Lương cơ bản (VNĐ)" required error={
               form.formState.errors.base_salary?.message ||
-              (form.watch("base_salary") === 0 && !(editingEmployee?.base_salary === 0) ? "Lương cơ bản là bắt buộc" : undefined)
+              (form.formState.dirtyFields.base_salary && form.watch("base_salary") === 0 && !(editingEmployee?.base_salary === 0) ? "Lương cơ bản là bắt buộc" : undefined)
             }>
               <CurrencyInput
                 value={form.watch("base_salary") || 0}
