@@ -104,34 +104,28 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-5">
-      {/* Card chính */}
-      <div className="ring-1 ring-border rounded-xl overflow-hidden">
-        {/* Header */}
-        <div className="bg-card px-4 py-3 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h3 className="font-semibold text-foreground">Thông báo</h3>
-            {unreadCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-destructive/10 text-destructive">
-                {unreadCount} chưa đọc
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {unreadCount > 0 && (
-              <button onClick={handleMarkAllRead} className="text-xs text-primary hover:underline">
-                Đánh dấu đã đọc
-              </button>
-            )}
-            {isAdmin && (
-              <Button onClick={() => { form.reset(); setAnnouncModalOpen(true); }} leftIcon={<Plus size={14} />} size="sm">
-                Đăng thông báo
-              </Button>
-            )}
-          </div>
-        </div>
+      {/* Toolbar */}
+      <div className="bg-card rounded-xl ring-1 ring-border p-3 flex flex-wrap items-center gap-2">
+        {unreadCount > 0 && (
+          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-destructive/10 text-destructive">
+            {unreadCount} chưa đọc
+          </span>
+        )}
+        {unreadCount > 0 && (
+          <button onClick={handleMarkAllRead} className="text-xs text-primary hover:underline">
+            Đánh dấu đã đọc
+          </button>
+        )}
+        <div className="flex-1" />
+        {isAdmin && (
+          <Button onClick={() => { form.reset(); setAnnouncModalOpen(true); }} leftIcon={<Plus size={14} />} size="sm">
+            Đăng thông báo nội bộ
+          </Button>
+        )}
+      </div>
 
-        {/* List */}
-        <div className="bg-card">
+      {/* List */}
+      <div className="bg-card rounded-xl ring-1 ring-border overflow-hidden">
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground text-sm">Đang tải...</div>
           ) : notifications.length === 0 ? (
@@ -179,7 +173,6 @@ export default function NotificationsPage() {
               ))}
             </div>
           )}
-        </div>
       </div>
 
       {/* Create announcement modal */}
