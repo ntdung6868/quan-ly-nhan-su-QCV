@@ -142,8 +142,7 @@ export default function NotificationsPage() {
                   onClick={() => handleNotifClick(notif)}
                   className={cn(
                     "flex items-start gap-3 px-4 py-3.5 hover:bg-accent/50 transition cursor-pointer group",
-                    !notif.is_read && "bg-primary/5",
-                    isAnnouncement && "bg-blue-50/50 dark:bg-blue-900/10"
+                    !notif.is_read && (isAnnouncement ? "bg-blue-50/50 dark:bg-blue-900/10" : "bg-primary/5")
                   )}
                 >
                   {/* Icon */}
