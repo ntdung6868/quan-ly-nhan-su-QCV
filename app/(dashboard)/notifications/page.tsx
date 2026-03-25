@@ -18,7 +18,7 @@ import { formatDateTime, cn } from "@/lib/utils";
 import { announcementSchema, type AnnouncementFormValues } from "@/lib/validations/announcement";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Bell, Check, Plus, Trash2 } from "lucide-react";
+import { Bell, Check, Plus, Trash2, Megaphone } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -134,20 +134,29 @@ export default function NotificationsPage() {
             </div>
           ) : (
             <div className="divide-y divide-border/50">
-              {notifications.map((notif) => (
+              {notifications.map((notif) => {
+                const isAnnouncement = notif.title.includes("nội bộ");
+                return (
                 <div
                   key={notif.id}
                   onClick={() => handleNotifClick(notif)}
                   className={cn(
                     "flex items-start gap-3 px-4 py-3.5 hover:bg-accent/50 transition cursor-pointer group",
-                    !notif.is_read && "bg-primary/5"
+                    !notif.is_read && "bg-primary/5",
+                    isAnnouncement && "bg-blue-50/50 dark:bg-blue-900/10"
                   )}
                 >
-                  {/* Dot */}
-                  <div className={cn(
-                    "w-2 h-2 rounded-full mt-2 shrink-0",
-                    !notif.is_read ? "bg-primary" : "bg-transparent"
-                  )} />
+                  {/* Icon */}
+                  {isAnnouncement ? (
+                    <div className="w-7 h-7 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0 mt-0.5">
+                      <Megaphone size={14} className="text-blue-600 dark:text-blue-400" />
+                    </div>
+                  ) : (
+                    <div className={cn(
+                      "w-2 h-2 rounded-full mt-2.5 shrink-0",
+                      !notif.is_read ? "bg-primary" : "bg-transparent"
+                    )} />
+                  )}
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
@@ -169,7 +178,8 @@ export default function NotificationsPage() {
                     <Trash2 size={14} />
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
       </div>
