@@ -183,17 +183,64 @@ export default function NotificationsPage() {
       </div>
 
       {/* Create announcement modal */}
-      <Modal open={announcModalOpen} onClose={() => { setAnnouncModalOpen(false); form.reset(); }} title="Đăng thông báo nội bộ" size="md">
+      <Modal
+        open={announcModalOpen}
+        onClose={() => { setAnnouncModalOpen(false); form.reset(); }}
+        title="Đăng thông báo nội bộ"
+        size="md"
+      >
         <form onSubmit={form.handleSubmit(onSubmitAnnouncement)} className="space-y-3">
-          <FormField label="Tiêu đề" required error={form.formState.errors.title?.message}>
-            <input {...form.register("title")} className="input" />
+          <FormField
+            label="Tiêu đề"
+            required
+            error={form.formState.errors.title?.message}
+          >
+            <input
+              {...form.register("title")}
+              className="w-full px-3 py-2 text-sm border border-border bg-card text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+            />
           </FormField>
-          <FormField label="Nội dung" required error={form.formState.errors.content?.message}>
-            <textarea {...form.register("content")} rows={5} className="input resize-none" />
+
+          <FormField
+            label="Nội dung"
+            required
+            error={form.formState.errors.content?.message}
+          >
+            <textarea
+              {...form.register("content")}
+              rows={5}
+              className="w-full px-3 py-2 text-sm border border-border bg-card text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
           </FormField>
+
+          <FormField label="Hết hạn (tuỳ chọn)">
+            <input
+              type="datetime-local"
+              {...form.register("expires_at")}
+              className="w-full px-3 py-2 text-sm border border-border bg-card text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </FormField>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              {...form.register("is_pinned")}
+              className="rounded border-border"
+            />
+            <span className="text-sm text-foreground">Ghim thông báo</span>
+          </label>
+
           <div className="flex justify-end gap-2 pt-4 border-t border-border">
-            <Button variant="secondary" type="button" onClick={() => setAnnouncModalOpen(false)}>Huỷ</Button>
-            <Button type="submit" loading={createAnnouncement.isPending}>Đăng</Button>
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => setAnnouncModalOpen(false)}
+            >
+              Huỷ
+            </Button>
+            <Button type="submit" loading={createAnnouncement.isPending}>
+              Đăng
+            </Button>
           </div>
         </form>
       </Modal>
