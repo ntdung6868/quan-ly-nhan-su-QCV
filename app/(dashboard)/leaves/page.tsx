@@ -241,7 +241,14 @@ export default function LeavesPage() {
       {
         header: "Lý do",
         cell: (row) => (
-          <span className="text-muted-foreground max-w-xs truncate block">{row.reason}</span>
+          <div className="max-w-xs">
+            <span className="text-muted-foreground truncate block">{row.reason}</span>
+            {row.status === "rejected" && row.rejection_reason && (
+              <span className="text-xs text-red-600 dark:text-red-400 truncate block mt-0.5">
+                Từ chối: {row.rejection_reason}
+              </span>
+            )}
+          </div>
         ),
       },
       {
