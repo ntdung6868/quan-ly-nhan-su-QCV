@@ -175,9 +175,13 @@ export function Header({ onMenuClick, title }: HeaderProps) {
         </div>
 
         {/* User avatar */}
-        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs">
-          {getInitials(displayName)}
-        </div>
+        {employee?.avatar_url ? (
+          <img src={employee.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs">
+            {getInitials(displayName)}
+          </div>
+        )}
       </div>
     </header>
   );

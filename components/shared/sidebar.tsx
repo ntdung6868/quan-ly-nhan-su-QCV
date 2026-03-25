@@ -117,9 +117,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* User info + Sign out */}
         <div className="p-3 border-t border-border space-y-2">
           <div className="flex items-center gap-3 px-2">
-            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm shrink-0">
-              {getInitials(displayName)}
-            </div>
+            {employee?.avatar_url ? (
+              <img src={employee.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm shrink-0">
+                {getInitials(displayName)}
+              </div>
+            )}
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
               <p className="text-xs text-muted-foreground truncate">{roleLabel}</p>

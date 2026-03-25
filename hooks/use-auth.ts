@@ -87,6 +87,15 @@ export function useAuth() {
     window.location.href = "/login";
   }
 
+  function updateEmployee(partial: Partial<Employee>) {
+    setEmployee((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...partial };
+      setCache("employee", updated);
+      return updated;
+    });
+  }
+
   return {
     user,
     profile,
@@ -95,5 +104,6 @@ export function useAuth() {
     isAdmin: profile?.role === "admin",
     isManager: profile?.role === "manager" || profile?.role === "admin",
     signOut,
+    updateEmployee,
   };
 }

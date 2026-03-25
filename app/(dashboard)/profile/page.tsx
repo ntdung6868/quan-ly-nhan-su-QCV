@@ -23,7 +23,7 @@ interface PasswordFormValues {
 }
 
 export default function ProfilePage() {
-  const { profile, employee, isAdmin } = useAuth();
+  const { profile, employee, isAdmin, updateEmployee } = useAuth();
   const supabase = createClient();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -67,11 +67,12 @@ export default function ProfilePage() {
         .eq("id", employee.id);
       if (updateErr) throw updateErr;
 
-      // Refresh data
+      // Update mọi nơi hiển thị avatar
+      updateEmployee({ avatar_url: avatarUrl });
       queryClient.invalidateQueries({ queryKey: ["employees"] });
       setCropSrc(null);
-      // Force reload to update avatar everywhere
-      window.location.reload();
+      const { toast } = await import("sonner");
+      toast.success("Đã cập nhật ảnh đại diện");
     } catch (err) {
       const { toast } = await import("sonner");
       toast.error((err as Error).message || "Upload thất bại");
