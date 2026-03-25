@@ -198,7 +198,7 @@ export default function DepartmentsPage() {
               <Select
                 key={`mgr-${editingDept?.id ?? "new"}`}
                 value={form.watch("manager_id") ?? ""}
-                onValueChange={(v) => form.setValue("manager_id", v || null)}
+                onValueChange={(v) => form.setValue("manager_id", v || null, { shouldValidate: true })}
                 placeholder="Chưa chọn"
                 options={[{ value: "", label: "Chưa chọn" }, ...employeeOptions]}
               />

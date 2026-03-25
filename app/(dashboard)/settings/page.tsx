@@ -266,7 +266,7 @@ export default function SettingsPage() {
                 <FormField label="Ngưỡng miễn thuế TNCN (VNĐ)" error={salaryForm.formState.errors.tax_threshold?.message}>
                   <CurrencyInput
                     value={salaryForm.watch("tax_threshold") || 0}
-                    onChange={(v) => salaryForm.setValue("tax_threshold", v)}
+                    onChange={(v) => salaryForm.setValue("tax_threshold", v, { shouldValidate: true })}
                   />
                 </FormField>
                 <FormField label="Bảo hiểm xã hội (%)" error={salaryForm.formState.errors.social_insurance_rate?.message}>

@@ -332,7 +332,7 @@ export default function ContractsPage() {
           >
             <CurrencyInput
               value={form.watch("base_salary") || 0}
-              onChange={(v) => form.setValue("base_salary", v)}
+              onChange={(v) => form.setValue("base_salary", v, { shouldValidate: true })}
             />
           </FormField>
 

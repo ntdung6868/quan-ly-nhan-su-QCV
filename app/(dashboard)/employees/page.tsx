@@ -347,7 +347,7 @@ export default function EmployeesPage() {
               <Select
                 key={`gender-${editingEmployee?.id ?? "new"}-${form.watch("gender") ?? ""}`}
                 value={form.watch("gender") ?? ""}
-                onValueChange={(v) => form.setValue("gender", (v || undefined) as EmployeeFormValues["gender"])}
+                onValueChange={(v) => form.setValue("gender", (v || undefined) as EmployeeFormValues["gender"], { shouldValidate: true })}
                 placeholder="Chọn giới tính"
                 options={[
                   { value: "", label: "Chọn giới tính" },
@@ -364,7 +364,7 @@ export default function EmployeesPage() {
               <Select
                 key={`dept-${editingEmployee?.id ?? "new"}-${form.watch("department_id") ?? ""}`}
                 value={form.watch("department_id") ?? ""}
-                onValueChange={(v) => form.setValue("department_id", v || null)}
+                onValueChange={(v) => form.setValue("department_id", v || null, { shouldValidate: true })}
                 placeholder="Chọn phòng ban"
                 options={[{ value: "", label: "Chọn phòng ban" }, ...deptOptions]}
               />
@@ -375,14 +375,14 @@ export default function EmployeesPage() {
             <FormField label="Lương cơ bản (VNĐ)" error={form.formState.errors.base_salary?.message}>
               <CurrencyInput
                 value={form.watch("base_salary") || 0}
-                onChange={(v) => form.setValue("base_salary", v)}
+                onChange={(v) => form.setValue("base_salary", v, { shouldValidate: true })}
               />
             </FormField>
             <FormField label="Trạng thái" error={form.formState.errors.status?.message}>
               <Select
                 key={`status-${editingEmployee?.id ?? "new"}-${form.watch("status") ?? ""}`}
                 value={form.watch("status") ?? "active"}
-                onValueChange={(v) => form.setValue("status", v as EmployeeFormValues["status"])}
+                onValueChange={(v) => form.setValue("status", v as EmployeeFormValues["status"], { shouldValidate: true })}
                 options={[
                   { value: "active", label: "Đang làm việc" },
                   { value: "inactive", label: "Nghỉ việc" },
