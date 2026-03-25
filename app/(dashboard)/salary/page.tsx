@@ -63,6 +63,7 @@ export default function SalaryPage() {
         .from("employees")
         .select("*")
         .eq("status", "active")
+        .gt("base_salary", 0)
         .then(({ data }: { data: Employee[] | null }) => setEmployees(data || []));
     }
   }, [isAdmin]);
