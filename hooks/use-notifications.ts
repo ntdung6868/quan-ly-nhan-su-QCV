@@ -27,18 +27,24 @@ export function useNotifications(userId?: string) {
   });
 }
 
-export function useAnnouncements() {
+export function useAnnouncements(showAll = false) {
   const supabase = createClient();
 
   return useQuery({
-    queryKey: ["announcements"],
+    queryKey: ["announcements", showAll],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("announcements")
         .select("*, author:employees(full_name)")
-        .or("expires_at.is.null,expires_at.gt." + new Date().toISOString())
         .order("is_pinned", { ascending: false })
         .order("created_at", { ascending: false });
+
+      // NV chỉ thấy TB chưa hết hạn, admin thấy tất cả
+      if (!showAll) {
+        query = query.or("expires_at.is.null,expires_at.gt." + new Date().toISOString());
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return (data || []) as AnnouncementWithAuthor[];
     },

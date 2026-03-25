@@ -40,7 +40,7 @@ export default function NotificationsPage() {
   const [deleteNotifTarget, setDeleteNotifTarget] = useState<string | null>(null);
 
   const { data: notifications = [], isLoading: notifLoading } = useNotifications(profile?.id);
-  const { data: announcements = [], isLoading: announcLoading } = useAnnouncements();
+  const { data: announcements = [], isLoading: announcLoading } = useAnnouncements(isAdmin);
   const markAllRead = useMarkAllRead();
   const deleteNotification = useDeleteNotification();
   const createAnnouncement = useCreateAnnouncement();
