@@ -27,7 +27,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Notification } from "@/types/database";
 
-const MAX_PINNED = 3;
+const MAX_PINNED = 2;
 
 export default function NotificationsPage() {
   const { profile, employee, isAdmin } = useAuth();
