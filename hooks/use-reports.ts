@@ -57,7 +57,8 @@ export function useReportData(year: number) {
           supabase
             .from("employees")
             .select("id, department_id")
-            .eq("status", "active"),
+            .eq("status", "active")
+            .gt("base_salary", 0),
           supabase
             .from("payslips")
             .select("month, year, gross_salary, net_salary")

@@ -142,6 +142,10 @@ export default function EmployeesPage() {
         }
       );
     } else {
+      if (!values.base_salary || values.base_salary <= 0) {
+        toast.error("Lương cơ bản là bắt buộc khi tạo nhân viên mới");
+        return;
+      }
       createMutation.mutate(values, {
         onSuccess: (data) => {
           setModalOpen(false);

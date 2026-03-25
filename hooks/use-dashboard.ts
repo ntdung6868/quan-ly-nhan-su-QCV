@@ -91,7 +91,8 @@ export function useDashboard(
             supabase
               .from("employees")
               .select("id", { count: "exact" })
-              .eq("status", "active"),
+              .eq("status", "active")
+              .gt("base_salary", 0),
             supabase
               .from("attendance")
               .select("id", { count: "exact" })
