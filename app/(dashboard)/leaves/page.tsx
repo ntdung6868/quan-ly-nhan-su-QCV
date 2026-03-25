@@ -387,7 +387,7 @@ export default function LeavesPage() {
       {/* Create modal */}
       <Modal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { setModalOpen(false); form.reset(); }}
         title="Tạo đơn nghỉ phép"
         size="sm"
       >

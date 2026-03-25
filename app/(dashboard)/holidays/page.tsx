@@ -138,7 +138,7 @@ export default function HolidaysPage() {
       )}
 
       {/* Create Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Thêm ngày lễ" size="sm">
+      <Modal open={modalOpen} onClose={() => { setModalOpen(false); form.reset(); }} title="Thêm ngày lễ" size="sm">
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <div className="space-y-3">
             <FormField label="Tên ngày lễ" required error={form.formState.errors.name?.message}>

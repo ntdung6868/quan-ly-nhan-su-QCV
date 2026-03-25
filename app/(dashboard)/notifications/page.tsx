@@ -296,7 +296,7 @@ export default function NotificationsPage() {
       {/* Create announcement modal */}
       <Modal
         open={announcModalOpen}
-        onClose={() => setAnnouncModalOpen(false)}
+        onClose={() => { setAnnouncModalOpen(false); form.reset(); }}
         title="Đăng thông báo nội bộ"
         size="md"
       >
