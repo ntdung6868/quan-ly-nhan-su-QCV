@@ -8,6 +8,14 @@ export type ContractWithEmployee = Contract & {
   employee?: { full_name: string; employee_code: string };
 };
 
+function cleanValues(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    result[key] = val === "" ? null : val;
+  }
+  return result;
+}
+
 export function useContracts(employeeId?: string, isAdmin?: boolean) {
   const supabase = createClient();
 
@@ -37,10 +45,16 @@ export function useCreateContract() {
 
   return useMutation({
     mutationFn: async (values: Partial<Contract>) => {
-      const num = `HD${Date.now().toString().slice(-6)}`;
+      // Lấy mã NV để tạo số HĐ: HD-QCV012
+      const { data: emp } = await supabase
+        .from("employees")
+        .select("employee_code")
+        .eq("id", values.employee_id!)
+        .single();
+      const num = `HD-${emp?.employee_code || Date.now().toString().slice(-6)}`;
       const { data, error } = await supabase
         .from("contracts")
-        .insert({ ...values, contract_number: num } as Contract)
+        .insert(cleanValues({ ...values, contract_number: num }) as unknown as Contract)
         .select()
         .single();
       if (error) throw error;
@@ -63,7 +77,7 @@ export function useUpdateContract() {
     }: Partial<Contract> & { id: string }) => {
       const { data, error } = await supabase
         .from("contracts")
-        .update(values)
+        .update(cleanValues(values as Record<string, unknown>))
         .eq("id", id)
         .select()
         .single();
@@ -72,6 +86,9 @@ export function useUpdateContract() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      // Trigger sync: DB trigger cập nhật employee khi contract thay đổi
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 }

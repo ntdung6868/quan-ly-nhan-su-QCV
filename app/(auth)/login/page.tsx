@@ -1,17 +1,24 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Building2, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (searchParams.get("error") === "inactive") {
+      setError("Tài khoản của bạn đã bị vô hiệu hoá do nghỉ việc. Vui lòng liên hệ quản trị viên.");
+    }
+  }, [searchParams]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -20,13 +27,27 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (authError) {
         setError("Email hoặc mật khẩu không đúng. Vui lòng thử lại.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Check NV inactive ngay sau login
+      const { data: emp } = await supabase
+        .from("employees")
+        .select("status")
+        .eq("user_id", authData.user.id)
+        .single();
+
+      if (emp?.status === "inactive") {
+        await supabase.auth.signOut();
+        setError("Tài khoản của bạn đã bị vô hiệu hoá do nghỉ việc. Vui lòng liên hệ quản trị viên.");
         setIsLoading(false);
         return;
       }

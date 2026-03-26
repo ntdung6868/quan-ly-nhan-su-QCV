@@ -4,6 +4,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import type { Task, TaskStatus } from "@/types/database";
 
+function cleanValues(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    result[key] = val === "" ? null : val;
+  }
+  return result;
+}
+
 export type TaskWithRels = Task & {
   assignee?: { full_name: string };
   assigner?: { full_name: string };
@@ -56,7 +64,7 @@ export function useCreateTask() {
     mutationFn: async (values: Partial<Task>) => {
       const { data, error } = await supabase
         .from("tasks")
-        .insert(values as Task)
+        .insert(cleanValues(values as Record<string, unknown>) as unknown as Task)
         .select()
         .single();
       if (error) throw error;
@@ -80,7 +88,7 @@ export function useUpdateTask() {
     }: Partial<Task> & { id: string }) => {
       const { data, error } = await supabase
         .from("tasks")
-        .update(values)
+        .update(cleanValues(values as Record<string, unknown>))
         .eq("id", id)
         .select()
         .single();

@@ -74,6 +74,14 @@ export function useAuth() {
         const profileData = (profileRows?.[0] as Profile) ?? null;
         const employeeData = (empRows?.[0] as Employee) ?? null;
 
+        // NV nghỉ việc (inactive) → không cho truy cập (trừ admin)
+        if (employeeData?.status === "inactive" && profileData?.role !== "admin") {
+          await supabase.auth.signOut();
+          setState({ user: null, profile: null, employee: null, loading: false });
+          window.location.href = "/login?error=inactive";
+          return;
+        }
+
         setState({ profile: profileData, employee: employeeData, loading: false });
         if (profileData) setCache("profile", profileData);
         if (employeeData) setCache("employee", employeeData);

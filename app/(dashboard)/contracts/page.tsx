@@ -12,6 +12,7 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Select } from "@/components/ui/select";
 import { FormField } from "@/components/ui/form-field";
 import { formatDate, formatCurrency } from "@/lib/utils";
@@ -56,6 +57,7 @@ export default function ContractsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingContract, setEditingContract] = useState<ContractWithEmployee | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [terminateTarget, setTerminateTarget] = useState<ContractWithEmployee | null>(null);
 
   const { data: contracts = [], isLoading } = useContracts(employee?.id, isAdmin);
   const createContract = useCreateContract();
@@ -70,17 +72,22 @@ export default function ContractsPage() {
       start_date: "",
       end_date: "",
       base_salary: 0,
+      allowance: 0,
+      attendance_bonus: 0,
+      dependents: 0,
       status: "active",
       notes: "",
     },
   });
 
+  const watchEmployeeId = form.watch("employee_id");
+  const selectedEmployee = employees.find((e) => e.id === watchEmployeeId) || null;
+
   useEffect(() => {
     if (isAdmin) {
       supabase
         .from("employees")
-        .select("id,full_name")
-        .eq("status", "active")
+        .select("id,full_name,bank_name,bank_account,tax_code,insurance_code,status")
         .then(({ data }: { data: Employee[] | null }) => setEmployees(data || []));
     }
   }, [isAdmin]);
@@ -93,6 +100,9 @@ export default function ContractsPage() {
       start_date: "",
       end_date: "",
       base_salary: 0,
+      allowance: 0,
+      attendance_bonus: 0,
+      dependents: 0,
       status: "active",
       notes: "",
     });
@@ -107,6 +117,9 @@ export default function ContractsPage() {
       start_date: contract.start_date,
       end_date: contract.end_date || "",
       base_salary: contract.base_salary,
+      allowance: contract.allowance || 0,
+      attendance_bonus: contract.attendance_bonus || 0,
+      dependents: contract.dependents || 0,
       status: contract.status,
       notes: contract.notes || "",
     });
@@ -115,17 +128,12 @@ export default function ContractsPage() {
 
   function onSubmit(values: ContractFormValues) {
     if (editingContract) {
-      updateContract.mutate(
-        { id: editingContract.id, ...values },
-        {
-          onSuccess: () => {
-            toast.success("Cập nhật hợp đồng thành công");
-            setModalOpen(false);
-            form.reset();
-          },
-          onError: (err) => toast.error(err.message || "Lỗi"),
-        }
-      );
+      // Nếu chuyển sang "terminated" → hỏi xác nhận trước
+      if (values.status === "terminated" && editingContract.status === "active") {
+        setTerminateTarget(editingContract);
+        return;
+      }
+      doUpdate(editingContract.id, values);
     } else {
       createContract.mutate(values, {
         onSuccess: () => {
@@ -138,10 +146,35 @@ export default function ContractsPage() {
     }
   }
 
-  const employeeOptions = employees.map((e) => ({
-    value: e.id,
-    label: e.full_name,
-  }));
+  function doUpdate(id: string, values: ContractFormValues) {
+    updateContract.mutate(
+      { id, ...values },
+      {
+        onSuccess: () => {
+          if (values.status === "terminated") {
+            toast.success("Đã chấm dứt hợp đồng — nhân viên chuyển sang nghỉ việc");
+          } else {
+            toast.success("Cập nhật hợp đồng thành công");
+          }
+          setModalOpen(false);
+          setTerminateTarget(null);
+          form.reset();
+        },
+        onError: (err) => toast.error(err.message || "Lỗi"),
+      }
+    );
+  }
+
+  function handleTerminate() {
+    if (!terminateTarget) return;
+    doUpdate(terminateTarget.id, form.getValues());
+  }
+
+  // Lọc NV đã có HĐ (1 NV = 1 HĐ)
+  const employeesWithContract = new Set(contracts.map((c) => c.employee_id));
+  const employeeOptions = employees
+    .filter((e) => !employeesWithContract.has(e.id))
+    .map((e) => ({ value: e.id, label: e.full_name }));
 
   const columns = useMemo(() => {
     const cols: Column<ContractWithEmployee>[] = [
@@ -189,10 +222,26 @@ export default function ContractsPage() {
         ),
       },
       {
-        header: "Lương",
+        header: "Lương CB",
         cell: (row) => (
           <span className="font-medium text-foreground">
             {formatCurrency(row.base_salary)}
+          </span>
+        ),
+      },
+      {
+        header: "Phụ cấp",
+        cell: (row) => (
+          <span className="text-green-600 dark:text-green-400">
+            {formatCurrency(row.allowance || 0)}
+          </span>
+        ),
+      },
+      {
+        header: "Chuyên cần",
+        cell: (row) => (
+          <span className="text-blue-600 dark:text-blue-400">
+            {formatCurrency(row.attendance_bonus || 0)}
           </span>
         ),
       },
@@ -250,24 +299,34 @@ export default function ContractsPage() {
         size="md"
       >
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
-          <Controller
-            control={form.control}
-            name="employee_id"
-            render={({ field }) => (
-              <FormField
-                label="Nhân viên"
-                required
-                error={form.formState.errors.employee_id?.message}
-              >
-                <Select key={`c-${editingContract?.id ?? "n"}`}
-                  value={field.value}
-                  onValueChange={(v) => field.onChange(v)}
-                  placeholder="Chọn nhân viên"
-                  options={[{ value: "", label: "Chọn nhân viên" }, ...employeeOptions]}
-                />
-              </FormField>
-            )}
-          />
+          {editingContract ? (
+            <FormField label="Nhân viên">
+              <input
+                value={editingContract.employee?.full_name || ""}
+                disabled
+                className="w-full px-3 py-2 text-sm border border-border bg-muted text-foreground rounded-lg cursor-not-allowed"
+              />
+            </FormField>
+          ) : (
+            <Controller
+              control={form.control}
+              name="employee_id"
+              render={({ field }) => (
+                <FormField
+                  label="Nhân viên"
+                  required
+                  error={form.formState.errors.employee_id?.message}
+                >
+                  <Select key={`c-new-${field.value}`}
+                    value={field.value}
+                    onValueChange={(v) => field.onChange(v)}
+                    placeholder="Chọn nhân viên"
+                    options={[{ value: "", label: "Chọn nhân viên" }, ...employeeOptions]}
+                  />
+                </FormField>
+              )}
+            />
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <Controller
@@ -328,6 +387,7 @@ export default function ContractsPage() {
 
           <FormField
             label="Lương cơ bản (VNĐ)"
+            required
             error={form.formState.errors.base_salary?.message}
           >
             <CurrencyInput
@@ -336,13 +396,60 @@ export default function ContractsPage() {
             />
           </FormField>
 
-          <FormField label="Ghi chú" error={form.formState.errors.notes?.message}>
-            <textarea
-              {...form.register("notes")}
-              rows={2}
-              className="w-full px-3 py-2 text-sm border border-border bg-card text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              label="Phụ cấp (VNĐ)"
+              error={form.formState.errors.allowance?.message}
+            >
+              <CurrencyInput
+                value={form.watch("allowance") || 0}
+                onChange={(v) => form.setValue("allowance", v, { shouldValidate: true })}
+              />
+            </FormField>
+
+            <FormField
+              label="Chuyên cần (VNĐ)"
+              error={form.formState.errors.attendance_bonus?.message}
+            >
+              <CurrencyInput
+                value={form.watch("attendance_bonus") || 0}
+                onChange={(v) => form.setValue("attendance_bonus", v, { shouldValidate: true })}
+              />
+            </FormField>
+          </div>
+
+          <FormField
+            label="Số người phụ thuộc"
+            error={form.formState.errors.dependents?.message}
+          >
+            <input
+              type="number"
+              min={0}
+              {...form.register("dependents", { valueAsNumber: true })}
+              className="w-full px-3 py-2 text-sm border border-border bg-card text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </FormField>
+
+          {/* Hiển thị thông tin Ngân hàng & BH từ hồ sơ NV (read-only) */}
+          {selectedEmployee && (selectedEmployee.bank_name || selectedEmployee.tax_code || selectedEmployee.insurance_code) && (
+            <div className="border-t border-border pt-3 mt-1">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Thông tin từ hồ sơ nhân viên</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm bg-muted/50 rounded-lg p-3">
+                {selectedEmployee.bank_name && (
+                  <p><span className="text-muted-foreground">Ngân hàng:</span> {selectedEmployee.bank_name}</p>
+                )}
+                {selectedEmployee.bank_account && (
+                  <p><span className="text-muted-foreground">Số TK:</span> {selectedEmployee.bank_account}</p>
+                )}
+                {selectedEmployee.tax_code && (
+                  <p><span className="text-muted-foreground">MST:</span> {selectedEmployee.tax_code}</p>
+                )}
+                {selectedEmployee.insurance_code && (
+                  <p><span className="text-muted-foreground">BHXH:</span> {selectedEmployee.insurance_code}</p>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-4 border-t border-border">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>
@@ -357,6 +464,18 @@ export default function ContractsPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Xác nhận chấm dứt hợp đồng */}
+      <ConfirmDialog
+        open={!!terminateTarget}
+        onOpenChange={(open) => !open && setTerminateTarget(null)}
+        title="Chấm dứt hợp đồng?"
+        description={`Hợp đồng ${terminateTarget?.contract_number} của ${terminateTarget?.employee?.full_name} sẽ bị chấm dứt. Nhân viên sẽ tự động chuyển sang trạng thái "Nghỉ việc".`}
+        variant="danger"
+        confirmText="Chấm dứt"
+        onConfirm={handleTerminate}
+        loading={updateContract.isPending}
+      />
     </div>
   );
 }

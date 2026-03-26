@@ -107,8 +107,15 @@ export default function SettingsPage() {
   }
 
   function onSaveSalary(values: SalaryConfigFormValues) {
+    const { overtime_multiplier, ...salaryValues } = values;
+
+    // overtime_multiplier thuộc company_config
+    if (companyData?.id) {
+      saveCompanyMutation.mutate({ id: companyData.id, overtime_multiplier });
+    }
+
     saveSalaryMutation.mutate(
-      { id: salaryData?.id, ...values },
+      { id: salaryData?.id, ...salaryValues },
       {
         onSuccess: () => toast.success("Đã lưu cấu hình lương"),
         onError: (err) => toast.error(err.message),
@@ -250,26 +257,10 @@ export default function SettingsPage() {
               <h3 className="font-semibold text-foreground mb-5 flex items-center gap-2">
                 <DollarSign size={18} className="text-green-500" /> Cấu hình tính lương
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                  label="Thuế thu nhập cá nhân (%)"
-                  hint="Áp dụng khi thu nhập > ngưỡng miễn thuế"
-                  error={salaryForm.formState.errors.personal_income_tax_rate?.message}
-                >
-                  <input
-                    type="number"
-                    step="0.1"
-                    {...salaryForm.register("personal_income_tax_rate", { valueAsNumber: true })}
-                    className="input"
-                  />
-                </FormField>
-                <FormField label="Ngưỡng miễn thuế TNCN (VNĐ)" error={salaryForm.formState.errors.tax_threshold?.message}>
-                  <CurrencyInput
-                    value={salaryForm.watch("tax_threshold") || 0}
-                    onChange={(v) => salaryForm.setValue("tax_threshold", v, { shouldValidate: true })}
-                  />
-                </FormField>
-                <FormField label="Bảo hiểm xã hội (%)" error={salaryForm.formState.errors.social_insurance_rate?.message}>
+              {/* Bảo hiểm */}
+              <h4 className="text-sm font-semibold text-foreground mb-3">Tỷ lệ bảo hiểm bắt buộc (NV đóng)</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <FormField label="BHXH (%)" error={salaryForm.formState.errors.social_insurance_rate?.message}>
                   <input
                     type="number"
                     step="0.1"
@@ -277,7 +268,7 @@ export default function SettingsPage() {
                     className="input"
                   />
                 </FormField>
-                <FormField label="Bảo hiểm y tế (%)" error={salaryForm.formState.errors.health_insurance_rate?.message}>
+                <FormField label="BHYT (%)" error={salaryForm.formState.errors.health_insurance_rate?.message}>
                   <input
                     type="number"
                     step="0.1"
@@ -285,7 +276,7 @@ export default function SettingsPage() {
                     className="input"
                   />
                 </FormField>
-                <FormField label="Bảo hiểm thất nghiệp (%)" error={salaryForm.formState.errors.unemployment_insurance_rate?.message}>
+                <FormField label="BHTN (%)" error={salaryForm.formState.errors.unemployment_insurance_rate?.message}>
                   <input
                     type="number"
                     step="0.1"
@@ -293,6 +284,10 @@ export default function SettingsPage() {
                     className="input"
                   />
                 </FormField>
+              </div>
+
+              {/* Ngày công & tăng ca */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                 <FormField label="Ngày công chuẩn/tháng" error={salaryForm.formState.errors.standard_work_days?.message}>
                   <input
                     type="number"
@@ -310,15 +305,38 @@ export default function SettingsPage() {
                 </FormField>
               </div>
 
-              <div className="bg-primary/5 rounded-lg p-4 mt-4 ring-1 ring-primary/10">
-                <p className="text-sm font-medium text-foreground mb-2">Công thức tính lương thực nhận:</p>
-                <p className="text-xs text-muted-foreground font-mono leading-relaxed">
-                  Gross = (Lương cơ bản / Ngày chuẩn x Ngày công thực tế) + Phụ cấp + Tăng ca<br />
-                  Bảo hiểm = Lương cơ bản x (BHXH + BHYT + BHTN)%<br />
-                  Thu nhập chịu thuế = Gross - Bảo hiểm - Ngưỡng miễn thuế<br />
-                  Thuế TNCN = Thu nhập chịu thuế x % thue (neu &gt; 0)<br />
-                  Thực nhận = Gross - Bảo hiểm - Thuế TNCN - Khấu trừ khác
-                </p>
+              {/* Công thức */}
+              <div className="bg-primary/5 rounded-lg p-4 mt-5 ring-1 ring-primary/10">
+                <p className="text-sm font-semibold text-foreground mb-2">Công thức tính lương (Luật Thuế TNCN 2026)</p>
+                <div className="text-xs text-muted-foreground font-mono leading-relaxed space-y-1">
+                  <p>Gross = ((Lương CB + Phụ cấp) / Ngày chuẩn &times; Ngày thực) + Chuyên cần + Tăng ca</p>
+                  <p>Bảo hiểm = Lương CB &times; (BHXH + BHYT + BHTN)%</p>
+                  <p>Thu nhập tính thuế = Gross - Bảo hiểm - 15.500.000 - (6.200.000 &times; số người PT)</p>
+                  <p>Thuế TNCN = Lũy tiến từng phần (nếu &gt; 0)</p>
+                  <p className="font-semibold text-foreground">Thực nhận = Gross - Bảo hiểm - Thuế TNCN</p>
+                </div>
+              </div>
+
+              {/* Biểu thuế lũy tiến */}
+              <div className="bg-muted/50 rounded-lg p-4 mt-3 ring-1 ring-border">
+                <p className="text-sm font-semibold text-foreground mb-2">Biểu thuế lũy tiến từng phần (NQ 110/2025)</p>
+                <p className="text-xs text-muted-foreground mb-2">Giảm trừ: bản thân 15,5 triệu/tháng — người phụ thuộc 6,2 triệu/tháng/người</p>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-muted-foreground border-b border-border">
+                      <th className="text-left py-1.5 font-medium">Bậc</th>
+                      <th className="text-left py-1.5 font-medium">Thu nhập tính thuế/tháng</th>
+                      <th className="text-right py-1.5 font-medium">Thuế suất</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-foreground">
+                    <tr className="border-b border-border/50"><td className="py-1.5">1</td><td>Đến 10 triệu</td><td className="text-right">5%</td></tr>
+                    <tr className="border-b border-border/50"><td className="py-1.5">2</td><td>Trên 10 — 30 triệu</td><td className="text-right">10%</td></tr>
+                    <tr className="border-b border-border/50"><td className="py-1.5">3</td><td>Trên 30 — 60 triệu</td><td className="text-right">20%</td></tr>
+                    <tr className="border-b border-border/50"><td className="py-1.5">4</td><td>Trên 60 — 100 triệu</td><td className="text-right">30%</td></tr>
+                    <tr><td className="py-1.5">5</td><td>Trên 100 triệu</td><td className="text-right">35%</td></tr>
+                  </tbody>
+                </table>
               </div>
 
               <div className="flex justify-end mt-5">

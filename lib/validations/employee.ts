@@ -7,7 +7,6 @@ export const employeeSchema = z.object({
   position: z.string().optional(),
   department_id: z.string().nullable(),
   hire_date: z.string().min(1, "Ngày vào làm là bắt buộc"),
-  base_salary: z.number().min(0, "Lương cơ bản không được âm"),
   status: z.enum(["active", "inactive", "on_leave"], {
     error: "Trạng thái không hợp lệ",
   }),

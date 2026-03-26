@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/shared/sidebar";
 import { Header } from "@/components/shared/header";
 import { useAuth } from "@/hooks/use-auth";
+import { createClient } from "@/lib/supabase/client";
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Tổng quan",
@@ -25,8 +26,31 @@ const pageTitles: Record<string, string> = {
 // Auth được middleware xử lý — render shell ngay lập tức
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  useAuth();
+  const { employee, isAdmin, signOut } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
+
+  // Realtime: NV bị set inactive khi đang dùng → đá ra ngay
+  useEffect(() => {
+    if (!employee?.id || isAdmin) return;
+    const supabase = createClient();
+
+    const channel = supabase
+      .channel("emp-status-guard")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "employees", filter: `id=eq.${employee.id}` },
+        async (payload: { new: { status: string } }) => {
+          if (payload.new.status === "inactive") {
+            await supabase.auth.signOut();
+            window.location.replace("/login?error=inactive");
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [employee?.id, isAdmin]);
 
   const title = pageTitles[pathname] || "";
 

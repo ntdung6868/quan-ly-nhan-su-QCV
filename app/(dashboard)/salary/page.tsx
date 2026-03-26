@@ -8,17 +8,53 @@ import {
   useUpdatePayslipStatus,
   type PayslipWithEmployee,
 } from "@/hooks/use-salary";
+import { useQueryClient } from "@tanstack/react-query";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
-import { DollarSign, FileText, Calculator, Download } from "lucide-react";
+import { DollarSign, FileText, Calculator, Download, RefreshCw, FileSpreadsheet } from "lucide-react";
+import XLSX from "xlsx-js-style";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import type { Employee } from "@/types/database";
+import type { Employee, Contract } from "@/types/database";
+
+// Biểu thuế lũy tiến từng phần - Luật Thuế TNCN 2026
+// Nghị quyết 110/2025/UBTVQH15
+const TAX_BRACKETS = [
+  { limit: 10_000_000, rate: 0.05 },
+  { limit: 30_000_000, rate: 0.10 },
+  { limit: 60_000_000, rate: 0.15 },
+  { limit: 100_000_000, rate: 0.20 },
+  { limit: Infinity, rate: 0.25 },
+];
+
+const PERSONAL_DEDUCTION = 15_500_000; // Giảm trừ bản thân
+const DEPENDENT_DEDUCTION = 6_200_000; // Giảm trừ mỗi người phụ thuộc
+
+/**
+ * Tính thuế TNCN lũy tiến từng phần theo Luật 2026
+ */
+function calculateProgressiveTax(taxableIncome: number): number {
+  if (taxableIncome <= 0) return 0;
+  let tax = 0;
+  let remaining = taxableIncome;
+  let prevLimit = 0;
+
+  for (const bracket of TAX_BRACKETS) {
+    const bracketWidth = bracket.limit - prevLimit;
+    const taxableInBracket = Math.min(remaining, bracketWidth);
+    tax += taxableInBracket * bracket.rate;
+    remaining -= taxableInBracket;
+    prevLimit = bracket.limit;
+    if (remaining <= 0) break;
+  }
+
+  return Math.round(tax);
+}
 
 const statusMap = {
   draft: { label: "Nháp", variant: "default" as const },
@@ -56,6 +92,8 @@ export default function SalaryPage() {
 
   const { data: salaryConfig } = useSalaryConfig();
   const updateStatus = useUpdatePayslipStatus();
+  const queryClient = useQueryClient();
+  const [overtimeMultiplier, setOvertimeMultiplier] = useState(1.5);
 
   useEffect(() => {
     if (isAdmin) {
@@ -63,10 +101,25 @@ export default function SalaryPage() {
         .from("employees")
         .select("*")
         .eq("status", "active")
-        .gt("base_salary", 0)
         .then(({ data }: { data: Employee[] | null }) => setEmployees(data || []));
+
+      // Lấy hệ số tăng ca từ company_config
+      supabase
+        .from("company_config")
+        .select("overtime_multiplier")
+        .maybeSingle()
+        .then(({ data }: { data: { overtime_multiplier: number } | null }) => {
+          if (data?.overtime_multiplier) setOvertimeMultiplier(data.overtime_multiplier);
+        });
     }
   }, [isAdmin]);
+
+  // Auto tính lương khi chọn tháng/năm
+  useEffect(() => {
+    if (isAdmin && salaryConfig && employees.length > 0) {
+      generatePayslips();
+    }
+  }, [selectedMonth, selectedYear, employees.length, salaryConfig]);
 
   async function generatePayslips() {
     if (!salaryConfig) {
@@ -82,20 +135,63 @@ export default function SalaryPage() {
           salaryConfig.unemployment_insurance_rate) /
         100;
 
-      const payslipsData = await Promise.all(
-        employees.map(async (emp) => {
+      // Lấy tất cả HĐ active kèm ngày bắt đầu
+      const { data: activeContracts } = await supabase
+        .from("contracts")
+        .select("employee_id, base_salary, allowance, attendance_bonus, dependents, start_date")
+        .eq("status", "active");
+
+      type ContractRow = {
+        employee_id: string;
+        base_salary: number;
+        allowance: number;
+        attendance_bonus: number;
+        dependents: number;
+        start_date: string;
+      };
+      const contractMap = new Map<string, ContractRow>(
+        (activeContracts || []).map((c: ContractRow) => [c.employee_id, c])
+      );
+
+      // Ngày đầu/cuối tháng (đúng cho mọi tháng kể cả tháng 2)
+      const monthStart = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`;
+      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+      const monthEnd = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+      // Chỉ tính cho NV có HĐ active + HĐ bắt đầu trước/trong tháng đang tính
+      const eligibleEmployees = employees.filter((emp) => {
+        const c = contractMap.get(emp.id);
+        if (!c) return false;
+        return c.start_date <= monthEnd;
+      });
+
+      // Lấy ngày lễ trong tháng (tính như ngày công, NV không cần đi làm)
+      const { data: holidaysData } = await supabase
+        .from("holidays")
+        .select("date")
+        .gte("date", monthStart)
+        .lte("date", monthEnd);
+
+      // Chỉ đếm ngày lễ rơi vào ngày làm việc (T2-T7, dow 1-6)
+      const holidayCount = (holidaysData || []).filter((h: { date: string }) => {
+        const dow = new Date(h.date).getDay();
+        return dow >= 1 && dow <= 6; // không đếm CN
+      }).length;
+
+      const payslipsRaw = await Promise.all(
+        eligibleEmployees.map(async (emp) => {
+          const contract = contractMap.get(emp.id)!;
+          const baseSalary = contract.base_salary;
+          const allowance = contract.allowance ?? 0;
+          const contractAttendanceBonus = contract.attendance_bonus ?? 0;
+          const dependents = contract.dependents ?? 0;
+
           const { data: attData } = await supabase
             .from("attendance")
             .select("work_hours, overtime_hours, status")
             .eq("employee_id", emp.id)
-            .gte(
-              "date",
-              `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`
-            )
-            .lte(
-              "date",
-              `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-31`
-            );
+            .gte("date", monthStart)
+            .lte("date", monthEnd);
 
           const attendanceDays = (attData || []).filter((a: { status: string }) =>
             ["present", "late"].includes(a.status)
@@ -111,10 +207,9 @@ export default function SalaryPage() {
             .select("days, leave_type_id")
             .eq("employee_id", emp.id)
             .eq("status", "approved")
-            .gte("start_date", `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`)
-            .lte("end_date", `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-31`);
+            .gte("start_date", monthStart)
+            .lte("end_date", monthEnd);
 
-          // Lấy danh sách leave_type có is_paid = true
           const { data: paidTypes } = await supabase
             .from("leave_types")
             .select("id")
@@ -125,76 +220,111 @@ export default function SalaryPage() {
             .filter((l: { leave_type_id: string }) => paidTypeIds.has(l.leave_type_id))
             .reduce((sum: number, l: { days: number }) => sum + l.days, 0);
 
-          // Ngày công = đi làm thực tế + nghỉ phép có lương
-          const actualDays = attendanceDays + paidLeaveDays;
-
-          const { data: allowancesData } = await supabase
-            .from("employee_allowances")
-            .select("amount")
-            .eq("employee_id", emp.id);
-          const { data: deductionsData } = await supabase
-            .from("employee_deductions")
-            .select("amount, percentage")
-            .eq("employee_id", emp.id);
-
-          const totalAllowances = (allowancesData || []).reduce(
-            (s: number, a: { amount: number }) => s + a.amount,
-            0
-          );
-          const baseSalary = emp.base_salary;
-          const dailySalary = baseSalary / workDays;
+          // Ngày công = đi làm + nghỉ phép có lương + ngày lễ
+          const actualDays = attendanceDays + paidLeaveDays + holidayCount;
           const cappedDays = Math.min(actualDays, workDays);
-          const actualBaseSalary = dailySalary * cappedDays;
-          const overtimePay =
-            (baseSalary / (workDays * 8)) * overtimeHours * 1.5;
 
-          const totalDeductions = (deductionsData || []).reduce((s: number, d: { percentage?: number; amount?: number }) => {
-            if (d.percentage) return s + baseSalary * (d.percentage / 100);
-            return s + (d.amount || 0);
-          }, 0);
+          // === CÔNG THỨC TÍNH LƯƠNG MỚI (Luật Thuế TNCN 2026) ===
 
-          const insuranceAmount = baseSalary * insRate;
-          const grossSalary = actualBaseSalary + totalAllowances + overtimePay;
-          const taxableIncome =
-            grossSalary - insuranceAmount - salaryConfig.tax_threshold;
-          const taxAmount =
-            taxableIncome > 0
-              ? taxableIncome * (salaryConfig.personal_income_tax_rate / 100)
-              : 0;
-          const netSalary =
-            grossSalary - insuranceAmount - taxAmount - totalDeductions;
+          // Chuyên cần: đi làm đủ ngày (trừ lễ + phép, chỉ tính ngày thực đi làm)
+          // Ngày cần đi làm = ngày chuẩn - ngày lễ
+          const requiredDays = workDays - holidayCount;
+          const attendanceBonus = attendanceDays >= requiredDays ? contractAttendanceBonus : 0;
+
+          // 1. Gross = ((Lương CB + Phụ cấp) / Ngày chuẩn × Ngày thực) + Chuyên cần + Tăng ca
+          const dailySalary = (baseSalary + allowance) / workDays;
+          const proRataSalary = dailySalary * cappedDays;
+          const overtimePay = (baseSalary / (workDays * 8)) * overtimeHours * overtimeMultiplier;
+          const grossSalary = proRataSalary + attendanceBonus + overtimePay;
+
+          // 2. Bảo hiểm = Lương CB × (BHXH + BHYT + BHTN)%
+          const insuranceAmount = Math.round(baseSalary * insRate);
+
+          // 3. Thu nhập tính thuế = Gross - BH - Giảm trừ cá nhân - Giảm trừ người phụ thuộc
+          const totalDeduction = PERSONAL_DEDUCTION + (DEPENDENT_DEDUCTION * dependents);
+          const taxableIncome = grossSalary - insuranceAmount - totalDeduction;
+
+          // 4. Thuế TNCN = lũy tiến từng phần
+          const taxAmount = calculateProgressiveTax(taxableIncome);
+
+          // 5. Thực nhận = Gross - BH - Thuế
+          const netSalary = grossSalary - insuranceAmount - taxAmount;
 
           return {
             employee_id: emp.id,
             month: selectedMonth,
             year: selectedYear,
             base_salary: baseSalary,
-            total_allowances: totalAllowances,
-            total_deductions: totalDeductions,
-            gross_salary: grossSalary,
-            tax_amount: Math.max(0, taxAmount),
+            total_allowances: allowance,
+            total_deductions: 0,
+            gross_salary: Math.round(grossSalary),
+            tax_amount: taxAmount,
             insurance_amount: insuranceAmount,
-            net_salary: Math.max(0, netSalary),
+            net_salary: Math.max(0, Math.round(netSalary)),
             work_days: workDays,
             actual_work_days: cappedDays,
             overtime_hours: overtimeHours,
-            overtime_pay: overtimePay,
+            overtime_pay: Math.round(overtimePay),
+            attendance_bonus: attendanceBonus,
             status: "draft" as const,
             breakdown: {
-              actualBaseSalary,
-              overtimePay,
+              allowance,
+              attendanceBonus,
+              dependents,
+              proRataSalary: Math.round(proRataSalary),
+              overtimePay: Math.round(overtimePay),
               insuranceAmount,
+              personalDeduction: PERSONAL_DEDUCTION,
+              dependentDeduction: DEPENDENT_DEDUCTION * dependents,
+              taxableIncome: Math.max(0, Math.round(taxableIncome)),
               taxAmount,
             },
           };
         })
       );
 
-      const { error } = await supabase.from("payslips").upsert(payslipsData, {
-        onConflict: "employee_id,month,year",
-      });
-      if (error) throw error;
-      toast.success(`Đã tính lương cho ${payslipsData.length} nhân viên`);
+      const payslipsData = payslipsRaw.filter(Boolean);
+
+      // Lấy payslip hiện tại để biết cái nào đã confirmed/paid → không ghi đè
+      const { data: existingPayslips } = await supabase
+        .from("payslips")
+        .select("employee_id, status")
+        .eq("month", selectedMonth)
+        .eq("year", selectedYear);
+
+      const lockedIds = new Set(
+        (existingPayslips || [])
+          .filter((p: { status: string }) => p.status !== "draft")
+          .map((p: { employee_id: string }) => p.employee_id)
+      );
+
+      // Chỉ upsert payslip draft hoặc mới (bỏ qua confirmed/paid)
+      const draftPayslips = payslipsData.filter(
+        (p) => p && !lockedIds.has(p.employee_id)
+      );
+
+      // Xoá payslip DRAFT của NV không còn đủ điều kiện
+      const eligibleIds = new Set(eligibleEmployees.map((e) => e.id));
+      const ineligibleIds = employees
+        .filter((e) => !eligibleIds.has(e.id))
+        .map((e) => e.id);
+      if (ineligibleIds.length > 0) {
+        await supabase
+          .from("payslips")
+          .delete()
+          .in("employee_id", ineligibleIds)
+          .eq("month", selectedMonth)
+          .eq("year", selectedYear)
+          .eq("status", "draft"); // chỉ xoá draft
+      }
+
+      if (draftPayslips.length > 0) {
+        const { error } = await supabase.from("payslips").upsert(draftPayslips, {
+          onConflict: "employee_id,month,year",
+        });
+        if (error) throw error;
+      }
+      await queryClient.invalidateQueries({ queryKey: ["payslips"] });
     } catch (e: unknown) {
       toast.error((e as Error).message || "Lỗi tính lương");
     } finally {
@@ -213,33 +343,127 @@ export default function SalaryPage() {
     );
   }
 
-  function exportPDF(payslip: PayslipWithEmployee) {
-    const content = `
-PHIẾU LƯƠNG THÁNG ${payslip.month}/${payslip.year}
-===================================
-Nhân viên: ${payslip.employee?.full_name}
-Mã NV: ${payslip.employee?.employee_code}
+  function n(v: number) { return Math.round(v); }
 
-DOANH THU:
-- Lương cơ bản: ${formatCurrency(payslip.base_salary)}
-- Phụ cấp: ${formatCurrency(payslip.total_allowances)}
-- Tăng ca: ${formatCurrency(payslip.overtime_pay)}
-- Tổng gross: ${formatCurrency(payslip.gross_salary)}
+  // Style helpers
+  const hdrStyle = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" as const, vertical: "center" as const }, border: { bottom: { style: "thin" as const, color: { rgb: "1E40AF" } } } };
+  const bodyStyle = { font: { sz: 10 }, alignment: { vertical: "center" as const }, border: { bottom: { style: "thin" as const, color: { rgb: "E5E7EB" } } } };
+  const moneyStyle = { ...bodyStyle, alignment: { ...bodyStyle.alignment, horizontal: "right" as const }, numFmt: "#,##0" };
+  const totalStyle = { font: { bold: true, sz: 11 }, fill: { fgColor: { rgb: "F0FDF4" } }, alignment: { vertical: "center" as const }, border: { top: { style: "medium" as const, color: { rgb: "16A34A" } }, bottom: { style: "medium" as const, color: { rgb: "16A34A" } } } };
+  const totalMoneyStyle = { ...totalStyle, alignment: { ...totalStyle.alignment, horizontal: "right" as const }, numFmt: "#,##0" };
 
-KHẤU TRỪ:
-- Bảo hiểm: ${formatCurrency(payslip.insurance_amount)}
-- Thuế TNCN: ${formatCurrency(payslip.tax_amount)}
-- Khấu trừ khác: ${formatCurrency(payslip.total_deductions)}
+  function exportAllXLSX() {
+    if (payslips.length === 0) return;
 
-THỰC NHẬN: ${formatCurrency(payslip.net_salary)}
-    `;
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `phieu-luong-${payslip.employee?.employee_code}-${payslip.month}-${payslip.year}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const headers = ["STT", "Mã NV", "Họ tên", "Ngày công", "Lương CB", "Phụ cấp", "Chuyên cần", "Tăng ca (h)", "Tiền tăng ca", "Gross", "Bảo hiểm", "Thuế TNCN", "Thực nhận", "Trạng thái"];
+
+    // Title row
+    const titleRow = [{ v: `BẢNG LƯƠNG THÁNG ${selectedMonth}/${selectedYear}`, s: { font: { bold: true, sz: 14, color: { rgb: "1E40AF" } }, alignment: { horizontal: "center" } } }];
+
+    // Header
+    const hdrRow = headers.map((h) => ({ v: h, s: hdrStyle }));
+
+    // Data rows
+    const dataRows = payslips.map((p, i) => [
+      { v: i + 1, s: { ...bodyStyle, alignment: { horizontal: "center" as const, vertical: "center" as const } } },
+      { v: p.employee?.employee_code || "", s: { ...bodyStyle, font: { sz: 10, name: "Consolas" } } },
+      { v: p.employee?.full_name || "", s: { ...bodyStyle, font: { sz: 10, bold: true } } },
+      { v: `${p.actual_work_days}/${p.work_days}`, s: { ...bodyStyle, alignment: { horizontal: "center" as const, vertical: "center" as const } } },
+      { v: n(p.base_salary), t: "n", s: moneyStyle },
+      { v: n(p.total_allowances), t: "n", s: moneyStyle },
+      { v: n(p.attendance_bonus || 0), t: "n", s: moneyStyle },
+      { v: p.overtime_hours, t: "n", s: { ...bodyStyle, alignment: { horizontal: "center" as const, vertical: "center" as const } } },
+      { v: n(p.overtime_pay), t: "n", s: moneyStyle },
+      { v: n(p.gross_salary), t: "n", s: { ...moneyStyle, font: { sz: 10, bold: true } } },
+      { v: n(p.insurance_amount), t: "n", s: { ...moneyStyle, font: { sz: 10, color: { rgb: "DC2626" } } } },
+      { v: n(p.tax_amount), t: "n", s: { ...moneyStyle, font: { sz: 10, color: { rgb: "DC2626" } } } },
+      { v: n(p.net_salary), t: "n", s: { ...moneyStyle, font: { sz: 11, bold: true, color: { rgb: "16A34A" } } } },
+      { v: statusMap[p.status]?.label || p.status, s: { ...bodyStyle, alignment: { horizontal: "center" as const, vertical: "center" as const } } },
+    ]);
+
+    // Total row
+    const sumCol = (idx: number) => dataRows.reduce((s, r) => s + ((r[idx]?.v as number) || 0), 0);
+    const totalRow = [
+      { v: "", s: totalStyle },
+      { v: "", s: totalStyle },
+      { v: "TỔNG CỘNG", s: totalStyle },
+      { v: "", s: totalStyle },
+      { v: sumCol(4), t: "n", s: totalMoneyStyle },
+      { v: sumCol(5), t: "n", s: totalMoneyStyle },
+      { v: sumCol(6), t: "n", s: totalMoneyStyle },
+      { v: sumCol(7), t: "n", s: { ...totalStyle, alignment: { horizontal: "center" as const } } },
+      { v: sumCol(8), t: "n", s: totalMoneyStyle },
+      { v: sumCol(9), t: "n", s: { ...totalMoneyStyle, font: { bold: true, sz: 11 } } },
+      { v: sumCol(10), t: "n", s: totalMoneyStyle },
+      { v: sumCol(11), t: "n", s: totalMoneyStyle },
+      { v: sumCol(12), t: "n", s: { ...totalMoneyStyle, font: { bold: true, sz: 12, color: { rgb: "16A34A" } } } },
+      { v: "", s: totalStyle },
+    ];
+
+    const aoa = [titleRow, [], hdrRow, ...dataRows, totalRow];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    // Merge title row
+    ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 13 } }];
+
+    // Column widths
+    ws["!cols"] = [
+      { wch: 5 }, { wch: 10 }, { wch: 26 }, { wch: 10 },
+      { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
+      { wch: 14 }, { wch: 15 }, { wch: 12 }, { wch: 12 },
+      { wch: 15 }, { wch: 12 },
+    ];
+    ws["!rows"] = [{ hpt: 30 }, { hpt: 8 }, { hpt: 24 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, `T${selectedMonth}-${selectedYear}`);
+    XLSX.writeFile(wb, `bang-luong-T${selectedMonth}-${selectedYear}.xlsx`);
+  }
+
+  function exportPayslipXLSX(p: PayslipWithEmployee) {
+    const bd = (p.breakdown || {}) as Record<string, number>;
+    const lblStyle = { font: { sz: 10, color: { rgb: "6B7280" } }, border: { bottom: { style: "thin" as const, color: { rgb: "E5E7EB" } } } };
+    const valStyle = { font: { sz: 10, bold: true }, alignment: { horizontal: "right" as const }, numFmt: "#,##0", border: { bottom: { style: "thin" as const, color: { rgb: "E5E7EB" } } } };
+    const secStyle = { font: { sz: 10, bold: true, color: { rgb: "2563EB" } }, fill: { fgColor: { rgb: "EFF6FF" } } };
+    const netStyle = { font: { sz: 13, bold: true, color: { rgb: "16A34A" } }, alignment: { horizontal: "right" as const }, numFmt: "#,##0", fill: { fgColor: { rgb: "F0FDF4" } }, border: { top: { style: "medium" as const, color: { rgb: "16A34A" } } } };
+
+    const row = (label: string, val: number | string, isSection = false) => {
+      if (isSection) return [{ v: label, s: secStyle }, { v: "", s: secStyle }];
+      return [{ v: label, s: lblStyle }, typeof val === "number" ? { v: val, t: "n", s: valStyle } : { v: val, s: { ...valStyle, numFmt: undefined } }];
+    };
+
+    const aoa = [
+      [{ v: `PHIẾU LƯƠNG THÁNG ${p.month}/${p.year}`, s: { font: { bold: true, sz: 14, color: { rgb: "1E40AF" } }, alignment: { horizontal: "center" } } }],
+      [],
+      row("Nhân viên", p.employee?.full_name || ""),
+      row("Mã NV", p.employee?.employee_code || ""),
+      row("Ngày công", `${p.actual_work_days}/${p.work_days}`),
+      [],
+      row("THU NHẬP", 0, true),
+      row("Lương cơ bản", n(p.base_salary)),
+      row("Phụ cấp", n(p.total_allowances)),
+      row("Lương theo ngày công", n(bd.proRataSalary || 0)),
+      row("Chuyên cần", n(p.attendance_bonus || 0)),
+      row(`Tăng ca (${p.overtime_hours}h)`, n(p.overtime_pay)),
+      row("Tổng Gross", n(p.gross_salary)),
+      [],
+      row("KHẤU TRỪ", 0, true),
+      row("Bảo hiểm (BHXH+BHYT+BHTN)", n(p.insurance_amount)),
+      row("Giảm trừ bản thân", n(PERSONAL_DEDUCTION)),
+      row(`Giảm trừ người phụ thuộc (${bd.dependents || 0})`, n(bd.dependentDeduction || 0)),
+      row("Thu nhập tính thuế", n(bd.taxableIncome || 0)),
+      row("Thuế TNCN (lũy tiến)", n(p.tax_amount)),
+      [],
+      [{ v: "THỰC NHẬN", s: { ...netStyle, alignment: { horizontal: "left" as const }, font: { sz: 13, bold: true, color: { rgb: "16A34A" } } } }, { v: n(p.net_salary), t: "n", s: netStyle }],
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
+    ws["!cols"] = [{ wch: 32 }, { wch: 20 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Phieu luong");
+    XLSX.writeFile(wb, `phieu-luong-${p.employee?.employee_code}-T${p.month}-${p.year}.xlsx`);
   }
 
   const totalNet = useMemo(
@@ -288,6 +512,14 @@ THỰC NHẬN: ${formatCurrency(payslip.net_salary)}
         ),
       },
       {
+        header: "Chuyên cần",
+        cell: (row) => (
+          <span className={row.attendance_bonus > 0 ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}>
+            {formatCurrency(row.attendance_bonus || 0)}
+          </span>
+        ),
+      },
+      {
         header: "Gross",
         cell: (row) => (
           <span className="text-foreground">{formatCurrency(row.gross_salary)}</span>
@@ -332,9 +564,9 @@ THỰC NHẬN: ${formatCurrency(payslip.net_salary)}
               <FileText size={14} />
             </button>
             <button
-              onClick={() => exportPDF(row)}
+              onClick={() => exportPayslipXLSX(row)}
               className="p-1.5 hover:bg-accent rounded text-muted-foreground transition"
-              title="Xuất"
+              title="Xuất phiếu lương"
             >
               <Download size={14} />
             </button>
@@ -380,14 +612,14 @@ THỰC NHẬN: ${formatCurrency(payslip.net_salary)}
         />
         <div className="flex-1" />
         {isAdmin && (
-          <Button
+          <button
             onClick={generatePayslips}
-            loading={isGenerating}
-            leftIcon={<Calculator size={14} />}
-            size="sm"
+            disabled={isGenerating}
+            className="p-2 hover:bg-accent rounded-lg text-muted-foreground hover:text-foreground transition disabled:opacity-50"
+            title="Tính lại lương"
           >
-            Tính lương tháng {selectedMonth}/{selectedYear}
-          </Button>
+            <RefreshCw size={16} className={isGenerating ? "animate-spin" : ""} />
+          </button>
         )}
       </div>
 
@@ -397,9 +629,19 @@ THỰC NHẬN: ${formatCurrency(payslip.net_salary)}
           <h3 className="font-semibold text-foreground">
             Bảng lương Tháng {selectedMonth}/{selectedYear}
           </h3>
-          <span className="text-sm text-muted-foreground">
-            {payslips.length} phiếu lương
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {payslips.length} phiếu lương
+            </span>
+            {payslips.length > 0 && (
+              <button
+                onClick={exportAllXLSX}
+                className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium transition"
+              >
+                <FileSpreadsheet size={14} /> Xuất Excel
+              </button>
+            )}
+          </div>
         </div>
         <DataTable
           columns={columns}
@@ -427,7 +669,9 @@ THỰC NHẬN: ${formatCurrency(payslip.net_salary)}
       </div>
 
       {/* Detail modal */}
-      {selectedPayslip && (
+      {selectedPayslip && (() => {
+        const breakdown = (selectedPayslip.breakdown || {}) as Record<string, unknown>;
+        return (
         <Modal
           open={detailOpen}
           onClose={() => setDetailOpen(false)}
@@ -450,14 +694,26 @@ THỰC NHẬN: ${formatCurrency(payslip.net_salary)}
               </Badge>
             </div>
             <div className="space-y-2">
+              {/* --- THU NHẬP --- */}
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Thu nhập</p>
               <Row label="Lương cơ bản" value={formatCurrency(selectedPayslip.base_salary)} />
+              {selectedPayslip.total_allowances > 0 && (
+                <Row label="Phụ cấp" value={formatCurrency(selectedPayslip.total_allowances)} />
+              )}
               <Row
                 label={`Ngày công (${selectedPayslip.actual_work_days}/${selectedPayslip.work_days})`}
                 value={formatCurrency(
-                  (selectedPayslip.base_salary / selectedPayslip.work_days) *
+                  ((selectedPayslip.base_salary + selectedPayslip.total_allowances) / selectedPayslip.work_days) *
                     selectedPayslip.actual_work_days
                 )}
               />
+              {(selectedPayslip.attendance_bonus || 0) > 0 && (
+                <Row
+                  label="Chuyên cần"
+                  value={formatCurrency(selectedPayslip.attendance_bonus || 0)}
+                  className="text-green-600 dark:text-green-400"
+                />
+              )}
               {selectedPayslip.overtime_hours > 0 && (
                 <Row
                   label={`Tăng ca (${selectedPayslip.overtime_hours}h)`}
@@ -465,31 +721,44 @@ THỰC NHẬN: ${formatCurrency(payslip.net_salary)}
                 />
               )}
               <Row
-                label="Phụ cấp"
-                value={formatCurrency(selectedPayslip.total_allowances)}
-              />
-              <Row
-                label="Gross"
+                label="Tổng Gross"
                 value={formatCurrency(selectedPayslip.gross_salary)}
                 className="font-semibold border-t border-border pt-2"
               />
+
+              {/* --- KHẤU TRỪ --- */}
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-3">Khấu trừ</p>
               <Row
-                label="Bảo hiểm"
+                label={`Bảo hiểm (${((salaryConfig?.social_insurance_rate ?? 8) + (salaryConfig?.health_insurance_rate ?? 1.5) + (salaryConfig?.unemployment_insurance_rate ?? 1))}%)`}
                 value={`-${formatCurrency(selectedPayslip.insurance_amount)}`}
                 className="text-red-600 dark:text-red-400"
               />
+
+              {/* Giảm trừ gia cảnh */}
               <Row
-                label="Thuế TNCN"
+                label="Giảm trừ bản thân"
+                value={formatCurrency(PERSONAL_DEDUCTION)}
+                className="text-muted-foreground text-xs"
+              />
+              {(Number(breakdown?.dependents) || 0) > 0 && (
+                <Row
+                  label={`Giảm trừ ${breakdown.dependents} người phụ thuộc`}
+                  value={formatCurrency(DEPENDENT_DEDUCTION * Number(breakdown.dependents))}
+                  className="text-muted-foreground text-xs"
+                />
+              )}
+              <Row
+                label="Thu nhập tính thuế"
+                value={formatCurrency(Math.max(0, breakdown?.taxableIncome as number ?? 0))}
+                className="text-xs"
+              />
+              <Row
+                label="Thuế TNCN (lũy tiến)"
                 value={`-${formatCurrency(selectedPayslip.tax_amount)}`}
                 className="text-red-600 dark:text-red-400"
               />
-              {selectedPayslip.total_deductions > 0 && (
-                <Row
-                  label="Khấu trừ khác"
-                  value={`-${formatCurrency(selectedPayslip.total_deductions)}`}
-                  className="text-red-600 dark:text-red-400"
-                />
-              )}
+
+              {/* --- THỰC NHẬN --- */}
               <Row
                 label="THỰC NHẬN"
                 value={formatCurrency(selectedPayslip.net_salary)}
@@ -500,15 +769,16 @@ THỰC NHẬN: ${formatCurrency(payslip.net_salary)}
               <Button
                 variant="secondary"
                 leftIcon={<Download size={14} />}
-                onClick={() => exportPDF(selectedPayslip)}
+                onClick={() => exportPayslipXLSX(selectedPayslip)}
                 size="sm"
               >
-                Xuất file
+                Xuất Excel
               </Button>
             </div>
           </div>
         </Modal>
-      )}
+        );
+      })()}
 
       {/* Confirm status update */}
       <ConfirmDialog

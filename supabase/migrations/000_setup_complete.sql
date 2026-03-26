@@ -182,6 +182,9 @@ create table contracts (
   start_date date not null,
   end_date date,
   base_salary numeric(15,2) not null,
+  allowance numeric(15,2) default 0,
+  attendance_bonus numeric(15,2) default 0,
+  dependents int default 0,
   status text not null default 'active' check (status in ('active', 'expired', 'terminated')),
   notes text,
   created_at timestamptz default now(),
@@ -243,6 +246,7 @@ create table payslips (
   actual_work_days int default 0,
   overtime_hours numeric(5,2) default 0,
   overtime_pay numeric(15,2) default 0,
+  attendance_bonus numeric(15,2) default 0,
   breakdown jsonb default '{}',
   status text not null default 'draft' check (status in ('draft', 'confirmed', 'paid')),
   paid_at timestamptz,
@@ -664,6 +668,53 @@ create policy "Admin can view salary config" on salary_config for select using (
 create policy "Admin can manage salary config" on salary_config for all using (is_admin());
 
 -- ============================================================
+-- SYNC: Chấm dứt HĐ → NV nghỉ việc
+-- Khi contract.status → 'terminated':
+--   1. Nếu NV không còn HĐ active nào → set inactive + termination_date
+-- Khi contract.status → 'active' (tái ký):
+--   1. Set NV active lại + xoá termination_date
+-- ============================================================
+create or replace function sync_contract_employee_status()
+returns trigger as $$
+declare
+  v_active_count int;
+begin
+  -- Chấm dứt / hết hạn HĐ
+  if new.status in ('terminated', 'expired') and old.status = 'active' then
+    select count(*) into v_active_count
+    from contracts
+    where employee_id = new.employee_id
+      and status = 'active'
+      and id != new.id;
+
+    if v_active_count = 0 then
+      update employees
+      set status = 'inactive',
+          termination_date = current_date
+      where id = new.employee_id
+        and status = 'active';
+    end if;
+  end if;
+
+  -- Tái kích hoạt HĐ
+  if new.status = 'active' and old.status in ('terminated', 'expired') then
+    update employees
+    set status = 'active',
+        termination_date = null
+    where id = new.employee_id
+      and status = 'inactive';
+  end if;
+
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_sync_contract_employee on contracts;
+create trigger trg_sync_contract_employee
+  after update on contracts
+  for each row execute function sync_contract_employee_status();
+
+-- ============================================================
 -- REALTIME
 -- ============================================================
 do $$ begin
@@ -815,13 +866,13 @@ begin
   values (v_user_id, v_email, 'Nguyễn Đức Hiệp', 'admin')
   on conflict (id) do update set role = 'admin', full_name = 'Nguyễn Đức Hiệp', updated_at = now();
 
-  -- Employee admin (không cần chấm công, chỉ quản lý)
+  -- Employee admin (không cần chấm công/lương, chỉ quản lý)
   insert into public.employees (
     id, user_id, employee_code, full_name, email,
-    position, status, hire_date, base_salary
+    position, status, hire_date
   ) values (
     gen_random_uuid(), v_user_id, 'QCV001', 'Nguyễn Đức Hiệp', v_email,
-    'Giám đốc (CEO)', 'active', '2020-01-01', 0
+    'Giám đốc (CEO)', 'active', '2020-01-01'
   ) on conflict (employee_code) do nothing;
 
 end $$;

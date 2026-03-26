@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { AvatarCropModal } from "@/components/ui/avatar-crop-modal";
-import { formatDate, formatCurrency, getInitials } from "@/lib/utils";
+import { formatDate, getInitials } from "@/lib/utils";
 import {
   User, Mail, Phone, MapPin, Calendar, Building2, Lock, Camera,
   CreditCard, Shield,
@@ -204,13 +204,6 @@ export default function ProfilePage() {
               <InfoRow icon={MapPin} label="Địa chỉ" value={employee.address || "\u2014"} />
               <InfoRow icon={Building2} label="Phòng ban" value={deptName || "\u2014"} />
               <InfoRow icon={Calendar} label="Ngày vào làm" value={formatDate(employee.hire_date)} />
-              {isAdmin && (
-                <InfoRow
-                  icon={CreditCard}
-                  label="Lương cơ bản"
-                  value={formatCurrency(employee.base_salary)}
-                />
-              )}
             </div>
           </div>
 

@@ -86,86 +86,86 @@ begin
   insert into departments (id,name,code,description) values (gen_random_uuid(),'Phòng Kế toán','KT','Kế toán, tài chính') on conflict (code) do nothing;
   select id into v_d_kt from departments where code = 'KT';
 
-  -- EMPLOYEES
+  -- EMPLOYEES (lương nằm ở hợp đồng, không ở đây)
   select id into v_e1 from employees where employee_code = 'QCV001';
   if v_e1 is null then v_e1 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,position,status,hire_date,base_salary) values
-      (v_e1, v_admin_uid, 'QCV001', 'Nguyễn Đức Hiệp', 'admin@qcviet.vn', '1985-08-20', 'male', v_d_bgd, 'Giám đốc (CEO)', 'active', '2020-01-01', 0);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,position,status,hire_date) values
+      (v_e1, v_admin_uid, 'QCV001', 'Nguyễn Đức Hiệp', 'admin@qcviet.vn', '1985-08-20', 'male', v_d_bgd, 'Giám đốc (CEO)', 'active', '2020-01-01');
   end if;
   select id into v_e2 from employees where employee_code = 'QCV002';
   if v_e2 is null then v_e2 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e2, v_u2, 'QCV002', 'Tương Thị Bích Lan', 'tuongthibichlan@qcviet.vn', '1995-06-15', 'female', v_d_sale, v_e1, 'Nhân viên SALE', 'active', '2022-01-01', 10300000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e2, v_u2, 'QCV002', 'Tương Thị Bích Lan', 'tuongthibichlan@qcviet.vn', '1995-06-15', 'female', v_d_sale, v_e1, 'Nhân viên SALE', 'active', '2022-01-01');
   end if;
   select id into v_e3 from employees where employee_code = 'QCV003';
   if v_e3 is null then v_e3 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e3, v_u3, 'QCV003', 'Nguyễn Hoàng Yến', 'nguyenhoangyen@qcviet.vn', '1997-09-22', 'female', v_d_sale, v_e1, 'Nhân viên SALE', 'active', '2022-01-01', 7000000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e3, v_u3, 'QCV003', 'Nguyễn Hoàng Yến', 'nguyenhoangyen@qcviet.vn', '1997-09-22', 'female', v_d_sale, v_e1, 'Nhân viên SALE', 'active', '2022-01-01');
   end if;
   select id into v_e4 from employees where employee_code = 'QCV004';
   if v_e4 is null then v_e4 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e4, v_u4, 'QCV004', 'Lại Phước Đức', 'laiphuocduc@qcviet.vn', '1994-11-03', 'male', v_d_sale, v_e1, 'Nhân viên SALE', 'active', '2022-01-01', 8500000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e4, v_u4, 'QCV004', 'Lại Phước Đức', 'laiphuocduc@qcviet.vn', '1994-11-03', 'male', v_d_sale, v_e1, 'Nhân viên SALE', 'active', '2022-01-01');
   end if;
   select id into v_e5 from employees where employee_code = 'QCV005';
   if v_e5 is null then v_e5 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e5, v_u5, 'QCV005', 'Vũ Anh Tuấn', 'vuanhtuan@qcviet.vn', '1993-04-18', 'male', v_d_sale, v_e1, 'Nhân viên SALE', 'active', '2022-01-01', 9000000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e5, v_u5, 'QCV005', 'Vũ Anh Tuấn', 'vuanhtuan@qcviet.vn', '1993-04-18', 'male', v_d_sale, v_e1, 'Nhân viên SALE', 'active', '2022-01-01');
   end if;
   select id into v_e6 from employees where employee_code = 'QCV006';
   if v_e6 is null then v_e6 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e6, v_u6, 'QCV006', 'Nhựt', 'nhut@qcviet.vn', '2000-02-25', 'male', v_d_sx, v_e1, 'Công nhân SX', 'active', '2023-01-01', 5000000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e6, v_u6, 'QCV006', 'Nhựt', 'nhut@qcviet.vn', '2000-02-25', 'male', v_d_sx, v_e1, 'Công nhân SX', 'active', '2023-01-01');
   end if;
   select id into v_e7 from employees where employee_code = 'QCV007';
   if v_e7 is null then v_e7 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e7, v_u7, 'QCV007', 'Nguyễn Hoài Nam', 'nguyenhoainam@qcviet.vn', '1996-07-10', 'male', v_d_sx, v_e1, 'Công nhân SX', 'active', '2022-01-01', 6000000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e7, v_u7, 'QCV007', 'Nguyễn Hoài Nam', 'nguyenhoainam@qcviet.vn', '1996-07-10', 'male', v_d_sx, v_e1, 'Công nhân SX', 'active', '2022-01-01');
   end if;
   select id into v_e8 from employees where employee_code = 'QCV008';
   if v_e8 is null then v_e8 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e8, v_u8, 'QCV008', 'Nguyễn Đức Hà', 'nguyenducha@qcviet.vn', '1991-01-28', 'male', v_d_sx, v_e1, 'Kỹ thuật SX', 'active', '2022-01-01', 8200000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e8, v_u8, 'QCV008', 'Nguyễn Đức Hà', 'nguyenducha@qcviet.vn', '1991-01-28', 'male', v_d_sx, v_e1, 'Kỹ thuật SX', 'active', '2022-01-01');
   end if;
   select id into v_e9 from employees where employee_code = 'QCV009';
   if v_e9 is null then v_e9 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e9, v_u9, 'QCV009', 'Hiếu', 'hieu@qcviet.vn', '2001-05-14', 'male', v_d_sx, v_e1, 'Công nhân SX', 'active', '2025-07-01', 6000000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e9, v_u9, 'QCV009', 'Hiếu', 'hieu@qcviet.vn', '2001-05-14', 'male', v_d_sx, v_e1, 'Công nhân SX', 'active', '2025-07-01');
   end if;
   select id into v_e10 from employees where employee_code = 'QCV010';
   if v_e10 is null then v_e10 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e10, v_u10, 'QCV010', 'Kiều Oanh', 'kieuoanh@qcviet.vn', '2002-12-30', 'female', v_d_mkt, v_e1, 'Nhân viên MAR', 'active', '2025-12-26', 3000000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e10, v_u10, 'QCV010', 'Kiều Oanh', 'kieuoanh@qcviet.vn', '2002-12-30', 'female', v_d_mkt, v_e1, 'Nhân viên MAR', 'active', '2025-12-26');
   end if;
   select id into v_e11 from employees where employee_code = 'QCV011';
   if v_e11 is null then v_e11 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e11, v_u11, 'QCV011', 'Nguyễn Hiền Thảo Linh', 'nguyenhienthaolinh@qcviet.vn', '1999-03-08', 'female', v_d_mkt, v_e1, 'Nhân viên MAR', 'active', '2022-01-01', 8500000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e11, v_u11, 'QCV011', 'Nguyễn Hiền Thảo Linh', 'nguyenhienthaolinh@qcviet.vn', '1999-03-08', 'female', v_d_mkt, v_e1, 'Nhân viên MAR', 'active', '2022-01-01');
   end if;
   select id into v_e12 from employees where employee_code = 'QCV012';
   if v_e12 is null then v_e12 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e12, v_u12, 'QCV012', 'Nguyễn Trí Dũng', 'nguyentridung@qcviet.vn', '2003-08-12', 'male', v_d_mkt, v_e1, 'Nhân viên MAR', 'active', '2022-01-01', 9000000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e12, v_u12, 'QCV012', 'Nguyễn Trí Dũng', 'nguyentridung@qcviet.vn', '2003-08-12', 'male', v_d_mkt, v_e1, 'Nhân viên MAR', 'active', '2022-01-01');
   end if;
   select id into v_e13 from employees where employee_code = 'QCV013';
   if v_e13 is null then v_e13 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e13, v_u13, 'QCV013', 'Võ Minh Tâm', 'vominhtam@qcviet.vn', '1998-10-20', 'male', v_d_mkt, v_e1, 'Nhân viên MAR', 'active', '2025-06-01', 8500000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e13, v_u13, 'QCV013', 'Võ Minh Tâm', 'vominhtam@qcviet.vn', '1998-10-20', 'male', v_d_mkt, v_e1, 'Nhân viên MAR', 'active', '2025-06-01');
   end if;
   select id into v_e14 from employees where employee_code = 'QCV014';
   if v_e14 is null then v_e14 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e14, v_u14, 'QCV014', 'Ngô Nguyễn Như Quỳnh', 'ngonguyennhuquynh@qcviet.vn', '2000-11-05', 'female', v_d_mkt, v_e1, 'Nhân viên MAR', 'active', '2025-08-01', 6500000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e14, v_u14, 'QCV014', 'Ngô Nguyễn Như Quỳnh', 'ngonguyennhuquynh@qcviet.vn', '2000-11-05', 'female', v_d_mkt, v_e1, 'Nhân viên MAR', 'active', '2025-08-01');
   end if;
   select id into v_e15 from employees where employee_code = 'QCV015';
   if v_e15 is null then v_e15 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e15, v_u15, 'QCV015', 'Nguyễn Thanh Trà', 'nguyenthanhtra@qcviet.vn', '1997-06-19', 'female', v_d_kt, v_e1, 'Kế toán', 'active', '2025-06-01', 8000000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e15, v_u15, 'QCV015', 'Nguyễn Thanh Trà', 'nguyenthanhtra@qcviet.vn', '1997-06-19', 'female', v_d_kt, v_e1, 'Kế toán', 'active', '2025-06-01');
   end if;
   select id into v_e16 from employees where employee_code = 'QCV016';
   if v_e16 is null then v_e16 := gen_random_uuid();
-    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date,base_salary) values
-      (v_e16, v_u16, 'QCV016', 'Nguyễn Thị Quỳnh Mai', 'nguyenthiquynhmai@qcviet.vn', '1998-03-27', 'female', v_d_sx, v_e1, 'Nhân viên SX', 'active', '2025-07-01', 6000000);
+    insert into employees (id,user_id,employee_code,full_name,email,date_of_birth,gender,department_id,manager_id,position,status,hire_date) values
+      (v_e16, v_u16, 'QCV016', 'Nguyễn Thị Quỳnh Mai', 'nguyenthiquynhmai@qcviet.vn', '1998-03-27', 'female', v_d_sx, v_e1, 'Nhân viên SX', 'active', '2025-07-01');
   end if;
 
   -- Gán manager BGĐ

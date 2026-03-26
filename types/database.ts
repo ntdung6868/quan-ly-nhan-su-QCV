@@ -201,6 +201,9 @@ export interface Contract {
   start_date: string;
   end_date: string | null;
   base_salary: number;
+  allowance: number;
+  attendance_bonus: number;
+  dependents: number;
   status: ContractStatus;
   notes: string | null;
   created_at: string;
@@ -265,6 +268,7 @@ export interface Payslip {
   actual_work_days: number;
   overtime_hours: number;
   overtime_pay: number;
+  attendance_bonus: number;
   breakdown: Record<string, unknown>;
   status: PayslipStatus;
   paid_at: string | null;

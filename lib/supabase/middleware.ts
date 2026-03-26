@@ -43,21 +43,40 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Đã đăng nhập → redirect khỏi trang auth
-  if (user && isPublic) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
-  // Kiểm tra quyền admin cho các trang quản trị
-  if (user && adminPaths.some((p) => pathname.startsWith(p))) {
+  // Đã đăng nhập → check employee status + quyền
+  if (user) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
       .single();
 
+    // NV nghỉ việc (inactive) → sign out + redirect login
     if (profile?.role !== "admin") {
+      const { data: emp } = await supabase
+        .from("employees")
+        .select("status")
+        .eq("user_id", user.id)
+        .single();
+
+      if (emp?.status === "inactive") {
+        // Xoá session
+        await supabase.auth.signOut();
+        const url = new URL("/login?error=inactive", request.url);
+        return NextResponse.redirect(url);
+      }
+    }
+
+    // Đã đăng nhập → redirect khỏi trang login
+    if (isPublic) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+
+    // Kiểm tra quyền admin
+    if (adminPaths.some((p) => pathname.startsWith(p))) {
+      if (profile?.role !== "admin") {
+        return NextResponse.redirect(new URL("/dashboard", request.url));
+      }
     }
   }
 

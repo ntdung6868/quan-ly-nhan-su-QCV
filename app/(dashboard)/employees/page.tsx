@@ -19,8 +19,8 @@ import { FormField } from "@/components/ui/form-field";
 import { Select } from "@/components/ui/select";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { formatDate, formatCurrency, getInitials, generateCredentials } from "@/lib/utils";
-import { CurrencyInput } from "@/components/ui/currency-input";
+import { formatDate, getInitials, generateCredentials } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 import { Users, Plus, Search, Edit2, Trash2, Copy, Check, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 
@@ -42,6 +42,8 @@ export default function EmployeesPage() {
   const [resetTarget, setResetTarget] = useState<EmployeeWithRels | null>(null);
   const [resetResult, setResetResult] = useState<{ email: string; password: string } | null>(null);
   const [isResetting, setIsResetting] = useState(false);
+  const [deactivateTarget, setDeactivateTarget] = useState<{ employee: EmployeeWithRels; values: EmployeeFormValues; hasContract: boolean } | null>(null);
+  const [isDeactivating, setIsDeactivating] = useState(false);
 
   const { data: employeesData, isLoading } = useEmployees({
     search,
@@ -70,7 +72,6 @@ export default function EmployeesPage() {
       position: "",
       department_id: null,
       hire_date: new Date().toISOString().split("T")[0],
-      base_salary: 0,
       status: "active",
       gender: undefined,
       address: "",
@@ -90,7 +91,6 @@ export default function EmployeesPage() {
         position: editingEmployee.position ?? "",
         department_id: editingEmployee.department_id ?? null,
         hire_date: editingEmployee.hire_date,
-        base_salary: editingEmployee.base_salary,
         status: editingEmployee.status,
         gender: editingEmployee.gender ?? undefined,
         address: editingEmployee.address ?? "",
@@ -102,12 +102,11 @@ export default function EmployeesPage() {
     } else {
       form.reset({
         full_name: "",
-          phone: "",
+        phone: "",
         date_of_birth: "",
         position: "",
         department_id: null,
-          hire_date: new Date().toISOString().split("T")[0],
-        base_salary: 0,
+        hire_date: new Date().toISOString().split("T")[0],
         status: "active",
         gender: undefined,
         address: "",
@@ -129,30 +128,24 @@ export default function EmployeesPage() {
     setModalOpen(true);
   }
 
-  function onSubmit(values: EmployeeFormValues) {
+  async function onSubmit(values: EmployeeFormValues) {
     if (editingEmployee) {
-      // Chỉ admin (salary cũ = 0) mới được giữ salary = 0
-      const isEditingAdmin = editingEmployee.base_salary === 0;
-      if (!isEditingAdmin && (!values.base_salary || values.base_salary <= 0)) {
-        form.setError("base_salary", { message: "Lương cơ bản phải lớn hơn 0" });
+      // Set nghỉ việc → check HĐ active trước
+      if (values.status === "inactive" && editingEmployee.status !== "inactive") {
+        const supabase = createClient();
+        const { data: contracts } = await supabase
+          .from("contracts")
+          .select("id")
+          .eq("employee_id", editingEmployee.id)
+          .eq("status", "active");
+
+        const hasContract = (contracts?.length ?? 0) > 0;
+        setDeactivateTarget({ employee: editingEmployee, values, hasContract });
         return;
       }
-      updateMutation.mutate(
-        { id: editingEmployee.id, ...values },
-        {
-          onSuccess: () => {
-            toast.success("Cập nhật nhân viên thành công");
-            setModalOpen(false);
-            form.reset();
-          },
-          onError: (err) => toast.error(err.message),
-        }
-      );
+
+      doUpdateEmployee(editingEmployee.id, values);
     } else {
-      if (!values.base_salary || values.base_salary <= 0) {
-        form.setError("base_salary", { message: "Lương cơ bản là bắt buộc" });
-        return;
-      }
       createMutation.mutate(values, {
         onSuccess: (data) => {
           setModalOpen(false);
@@ -160,12 +153,64 @@ export default function EmployeesPage() {
           const creds = (data as Record<string, unknown>)._credentials as { email: string; password: string } | undefined;
           if (creds) {
             setCreatedCredentials(creds);
+            toast.info("Nhớ tạo hợp đồng cho nhân viên mới!", { duration: 6000 });
           } else {
             toast.success("Thêm nhân viên thành công");
+            toast.info("Nhớ tạo hợp đồng cho nhân viên mới!", { duration: 6000 });
           }
         },
         onError: (err) => toast.error(err.message),
       });
+    }
+  }
+
+  function doUpdateEmployee(id: string, values: EmployeeFormValues) {
+    updateMutation.mutate(
+      { id, ...values },
+      {
+        onSuccess: () => {
+          toast.success("Cập nhật nhân viên thành công");
+          setModalOpen(false);
+          form.reset();
+        },
+        onError: (err) => toast.error(err.message),
+      }
+    );
+  }
+
+  async function handleDeactivate() {
+    if (!deactivateTarget) return;
+    setIsDeactivating(true);
+    try {
+      const { employee: emp, values, hasContract } = deactivateTarget;
+
+      // Chấm dứt HĐ active nếu có
+      if (hasContract) {
+        const supabase = createClient();
+        await supabase
+          .from("contracts")
+          .update({ status: "terminated" })
+          .eq("employee_id", emp.id)
+          .eq("status", "active");
+      }
+
+      // Cập nhật NV
+      updateMutation.mutate(
+        { id: emp.id, ...values, termination_date: new Date().toISOString().split("T")[0] },
+        {
+          onSuccess: () => {
+            toast.success(hasContract
+              ? "Đã cho nghỉ việc và chấm dứt hợp đồng"
+              : "Đã cho nghỉ việc");
+            setDeactivateTarget(null);
+            setModalOpen(false);
+            form.reset();
+          },
+          onError: (err) => toast.error(err.message),
+        }
+      );
+    } finally {
+      setIsDeactivating(false);
     }
   }
 
@@ -233,10 +278,6 @@ export default function EmployeesPage() {
     {
       header: "Ngày vào",
       cell: (emp) => <span className="text-muted-foreground">{formatDate(emp.hire_date)}</span>,
-    },
-    {
-      header: "Lương",
-      cell: (emp) => <span className="text-foreground font-medium">{formatCurrency(emp.base_salary)}</span>,
     },
     {
       header: "Trạng thái",
@@ -365,15 +406,6 @@ export default function EmployeesPage() {
             <FormField label="Ngày vào làm" required error={form.formState.errors.hire_date?.message}>
               <input type="date" {...form.register("hire_date")} className="input" />
             </FormField>
-            <FormField label="Lương cơ bản (VNĐ)" required error={
-              form.formState.errors.base_salary?.message ||
-              (form.formState.dirtyFields.base_salary && form.watch("base_salary") === 0 && !(editingEmployee?.base_salary === 0) ? "Lương cơ bản là bắt buộc" : undefined)
-            }>
-              <CurrencyInput
-                value={form.watch("base_salary") || 0}
-                onChange={(v) => form.setValue("base_salary", v, { shouldValidate: true })}
-              />
-            </FormField>
             <FormField label="Trạng thái" error={form.formState.errors.status?.message}>
               <Select
                 key={`status-${editingEmployee?.id ?? "new"}-${form.watch("status") ?? ""}`}
@@ -406,6 +438,15 @@ export default function EmployeesPage() {
             <FormField label="Mã BHXH" error={form.formState.errors.insurance_code?.message}>
               <input {...form.register("insurance_code")} className="input" />
             </FormField>
+
+            {/* Hiện ngày nghỉ việc nếu NV inactive */}
+            {editingEmployee?.status === "inactive" && editingEmployee?.termination_date && (
+              <div className="col-span-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm">
+                <span className="text-red-700 dark:text-red-300 font-medium">
+                  Nghỉ việc từ: {formatDate(editingEmployee.termination_date)}
+                </span>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-border">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Huỷ</Button>
@@ -498,6 +539,22 @@ export default function EmployeesPage() {
           </div>
         )}
       </Modal>
+
+      {/* Xác nhận cho nghỉ việc */}
+      <ConfirmDialog
+        open={!!deactivateTarget}
+        onOpenChange={(open) => !open && setDeactivateTarget(null)}
+        title={`Cho "${deactivateTarget?.employee.full_name}" nghỉ việc?`}
+        description={
+          deactivateTarget?.hasContract
+            ? "Nhân viên này đang có hợp đồng hiệu lực. Hợp đồng sẽ bị chấm dứt và tài khoản sẽ bị khoá."
+            : "Nhân viên sẽ chuyển sang trạng thái nghỉ việc và tài khoản sẽ bị khoá."
+        }
+        variant="danger"
+        confirmText="Xác nhận nghỉ việc"
+        onConfirm={handleDeactivate}
+        loading={isDeactivating || updateMutation.isPending}
+      />
     </div>
   );
 }
