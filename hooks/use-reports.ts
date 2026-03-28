@@ -51,14 +51,25 @@ export function useReportData(year: number) {
   return useQuery({
     queryKey: ["reports", year],
     queryFn: async (): Promise<ReportData> => {
+      // Lấy admin user_ids để loại trừ
+      const { data: adminProfiles } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("role", "admin");
+      const adminUserIds = (adminProfiles || []).map((p: { id: string }) => p.id);
+
+      const empQuery = supabase
+        .from("employees")
+        .select("id, department_id")
+        .eq("status", "active");
+      if (adminUserIds.length > 0) {
+        empQuery.not("user_id", "in", `(${adminUserIds.join(",")})`);
+      }
+
       // Fetch ALL data in parallel -- one round trip each
       const [empRes, payslipRes, leaveRes, deptRes, attRes] =
         await Promise.all([
-          supabase
-            .from("employees")
-            .select("id, department_id")
-            .eq("status", "active")
-            .gt("base_salary", 0),
+          empQuery,
           supabase
             .from("payslips")
             .select("month, year, gross_salary, net_salary")

@@ -87,11 +87,20 @@ export function useDashboard(
 
       if (isAdmin || isManager) {
         // Lấy danh sách NV thật (bỏ admin)
-        const { data: realEmps } = await supabase
+        const { data: adminProfiles } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("role", "admin");
+        const adminUserIds = (adminProfiles || []).map((p: { id: string }) => p.id);
+
+        const query = supabase
           .from("employees")
           .select("id")
-          .eq("status", "active")
-          .gt("base_salary", 0);
+          .eq("status", "active");
+        if (adminUserIds.length > 0) {
+          query.not("user_id", "in", `(${adminUserIds.join(",")})`);
+        }
+        const { data: realEmps } = await query;
         const realEmpIds = (realEmps || []).map((e: { id: string }) => e.id);
 
         const [presentRes, pendingLeaveRes, taskStatsRes] =
