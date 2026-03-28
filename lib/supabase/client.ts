@@ -10,6 +10,11 @@ export function createClient() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
   if (!url || !key) {
+    // Khi prerender (build), env vars chưa có → không throw để tránh lỗi build.
+    // Queries sẽ không chạy vì hooks có `enabled` guard.
+    if (typeof window === "undefined") {
+      return createBrowserClient("https://placeholder.supabase.co", "placeholder");
+    }
     throw new Error(
       "Supabase chưa được cấu hình. Vui lòng cập nhật NEXT_PUBLIC_SUPABASE_URL và NEXT_PUBLIC_SUPABASE_ANON_KEY trong file .env.local"
     );
